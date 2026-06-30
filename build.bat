@@ -37,9 +37,8 @@ if %errorlevel% neq 0 (
 
 :: Ejecutar PyInstaller
 :: --onefile: genera un solo exe
-:: --noconsole: corre sin consola negra de python en segundo plano
 :: --add-data "static;static": adjunta la carpeta estática dentro del ejecutable
-call pyinstaller --onefile --noconsole --name="Be-Pacient" --add-data "static;static" app/main.py
+call pyinstaller --onefile --name="Be-Pacient" --add-data "static;static" app/main.py
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo la compilacion con PyInstaller.
     exit /b 1
