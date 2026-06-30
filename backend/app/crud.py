@@ -189,3 +189,20 @@ def delete_cita(db: Session, cita_id: int) -> bool:
     db.delete(db_cita)
     db.commit()
     return True
+
+def delete_paciente(db: Session, paciente_id: int) -> bool:
+    import os
+    paciente = db.get(Paciente, paciente_id)
+    if paciente:
+        for doc in paciente.documentos:
+            relative_path = doc.ruta_archivo.lstrip("/")
+            file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), relative_path)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+        db.delete(paciente)
+        db.commit()
+        return True
+    return False

@@ -556,6 +556,27 @@ function App() {
     }
   };
 
+  // Eliminar Paciente completo
+  const handleDeletePaciente = async (id: number) => {
+    if (!confirm("¿Deseas eliminar permanentemente a este paciente y todo su historial clínico (consultas, recetas y documentos adjuntos)? Esta acción es irreversible.")) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/pacientes/${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        alert("Paciente eliminado correctamente.");
+        setSelectedPaciente(null);
+        checkApiAndLoad();
+      } else {
+        alert("Error al eliminar al paciente.");
+      }
+    } catch (err) {
+      alert("Error de conexión");
+    }
+  };
+
   // Descargar Backup (.zip)
   const handleDownloadBackup = () => {
     window.open(`${API_BASE_URL.replace("/api", "")}/api/backup`);
@@ -830,6 +851,13 @@ function App() {
                             </p>
                           </div>
                         )}
+                        <button 
+                          className="btn btn-secondary" 
+                          style={{ marginTop: "1.5rem", width: "100%", color: "rgb(239, 68, 68)", borderColor: "rgba(239, 68, 68, 0.3)" }}
+                          onClick={() => handleDeletePaciente(selectedPaciente.id)}
+                        >
+                          🗑️ Eliminar Paciente
+                        </button>
                       </div>
                     </div>
                   </div>
