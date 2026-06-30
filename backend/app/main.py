@@ -7,6 +7,10 @@ import os
 import uuid
 import shutil
 import zipfile
+import sys
+import subprocess
+import threading
+import time
 from datetime import datetime
 
 from .database import create_db_and_tables, get_session, engine, DATABASE_FILENAME
@@ -28,10 +32,24 @@ from .schemas import (
 from . import crud
 from . import scanner
 
+def launch_browser():
+    # Esperar 2.0 segundos a que el servidor FastAPI levante
+    time.sleep(2.0)
+    try:
+        # Lanzar Edge en Modo App apuntando al host local
+        subprocess.run(["cmd", "/c", "start msedge.exe --app=http://localhost:8000"], shell=True)
+    except Exception:
+        pass
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Inicializa las tablas de SQLite en el arranque del servidor
     create_db_and_tables()
+    
+    # Si la aplicación está compilada (PyInstaller), abrir el navegador en Modo App
+    if getattr(sys, 'frozen', False):
+        threading.Thread(target=launch_browser, daemon=True).start()
+        
     yield
 
 app = FastAPI(
@@ -514,17 +532,16 @@ def restaurar_backup(file: UploadFile = File(...), db: Session = Depends(get_ses
             detail=f"Fallo durante la restauración: {str(e)}"
         )
 
-    # 2. Eliminar registro de la base de datos
-    crud.delete_documento(db, documento_id=documento_id)
-    return {"message": "Documento eliminado con éxito"}
-
 # Servir archivos estáticos del frontend de React en producción
-# Solo si existe la carpeta 'static' en el directorio del backend.
 from fastapi.staticfiles import StaticFiles
-import os
 
-backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-static_dir = os.path.join(backend_root, "static")
+# Determinar si estamos corriendo compilados por PyInstaller o en modo desarrollo
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+static_dir = os.path.join(base_path, "static")
 if os.path.exists(static_dir):
     app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
