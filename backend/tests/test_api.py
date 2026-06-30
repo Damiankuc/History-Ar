@@ -147,3 +147,81 @@ def test_upload_and_delete_documento(client: TestClient):
     res_history2 = client.get(f"/api/pacientes/{paciente_id}")
     assert len(res_history2.json()["documentos"]) == 0
 
+def test_configuracion_medica(client: TestClient):
+    # 1. Obtener config por defecto
+    res = client.get("/api/configuracion")
+    assert res.status_code == 200
+    assert res.json()["doctor_nombre"] == ""
+    
+    # 2. Actualizar config
+    update_data = {
+        "doctor_nombre": "Dra. Laura Gómez",
+        "doctor_especialidad": "Pediatría",
+        "doctor_matricula": "M.N. 98765"
+    }
+    res_update = client.post("/api/configuracion", json=update_data)
+    assert res_update.status_code == 200
+    assert res_update.json()["doctor_nombre"] == "Dra. Laura Gómez"
+    assert res_update.json()["doctor_especialidad"] == "Pediatría"
+
+def test_recetas_medicas(client: TestClient):
+    # 1. Registrar paciente
+    res_paciente = client.post("/api/pacientes", json={"nombre": "Laura", "apellido": "Sosa", "dni": "777", "fecha_nacimiento": "1990-12-05"})
+    paciente_id = res_paciente.json()["id"]
+
+    # 2. Crear receta
+    receta_data = {
+        "medicamentos": "Amoxicilina 500mg cada 8 horas",
+        "indicaciones": "Tomar con las comidas",
+        "paciente_id": paciente_id
+    }
+    res_create = client.post("/api/recetas", json=receta_data)
+    assert res_create.status_code == 201
+    assert res_create.json()["medicamentos"] == "Amoxicilina 500mg cada 8 horas"
+    receta_id = res_create.json()["id"]
+
+    # 3. Listar recetas del paciente
+    res_list = client.get(f"/api/pacientes/{paciente_id}/recetas")
+    assert res_list.status_code == 200
+    assert len(res_list.json()) == 1
+    assert res_list.json()[0]["medicamentos"] == "Amoxicilina 500mg cada 8 horas"
+
+    # 4. Eliminar receta
+    res_delete = client.delete(f"/api/recetas/{receta_id}")
+    assert res_delete.status_code == 200
+    assert res_delete.json() == {"message": "Receta eliminada con éxito"}
+
+def test_agenda_citas(client: TestClient):
+    # 1. Registrar paciente
+    res_paciente = client.post("/api/pacientes", json={"nombre": "Pedro", "apellido": "Alba", "dni": "666", "fecha_nacimiento": "1975-03-22"})
+    paciente_id = res_paciente.json()["id"]
+
+    # 2. Registrar cita
+    cita_data = {
+        "fecha_hora": "2026-07-15T10:30:00Z",
+        "duracion_minutos": 45,
+        "motivo": "Dolor abdominal",
+        "paciente_id": paciente_id
+    }
+    res_create = client.post("/api/citas", json=cita_data)
+    assert res_create.status_code == 201
+    assert res_create.json()["motivo"] == "Dolor abdominal"
+    cita_id = res_create.json()["id"]
+
+    # 3. Listar citas
+    res_list = client.get("/api/citas")
+    assert res_list.status_code == 200
+    assert len(res_list.json()) == 1
+    assert res_list.json()[0]["paciente"]["nombre"] == "Pedro"
+
+    # 4. Actualizar estado
+    res_update = client.put(f"/api/citas/{cita_id}?estado=completada")
+    assert res_update.status_code == 200
+    assert res_update.json()["estado"] == "completada"
+
+    # 5. Eliminar cita
+    res_delete = client.delete(f"/api/citas/{cita_id}")
+    assert res_delete.status_code == 200
+    assert res_delete.json() == {"message": "Cita eliminada con éxito"}
+
+

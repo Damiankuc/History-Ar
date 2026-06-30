@@ -21,6 +21,30 @@ interface Documento {
   consulta_id?: number;
 }
 
+interface Receta {
+  id: number;
+  medicamentos: string;
+  indicaciones?: string;
+  fecha: string;
+  paciente_id: number;
+  consulta_id?: number;
+}
+
+interface Cita {
+  id: number;
+  fecha_hora: string;
+  duracion_minutos: number;
+  motivo: string;
+  estado: string; // "programado", "completado", "cancelado"
+  paciente_id: number;
+  paciente?: {
+    id: number;
+    nombre: string;
+    apellido: string;
+    dni: string;
+  };
+}
+
 interface Paciente {
   id: number;
   nombre: string;
@@ -34,14 +58,16 @@ interface Paciente {
   fecha_creacion: string;
   consultas?: Consulta[];
   documentos?: Documento[];
+  recetas?: Receta[];
+  citas?: Cita[];
 }
 
 function App() {
   // Estado de navegación principal
-  const [activeTab, setActiveTab] = useState<"pacientes" | "nuevo-paciente">("pacientes");
+  const [activeTab, setActiveTab] = useState<"pacientes" | "nuevo-paciente" | "agenda" | "configuracion">("pacientes");
   
   // Estado de sub-tab en ficha de paciente
-  const [patientSubTab, setPatientSubTab] = useState<"consultas" | "documentos" | "imprimir">("consultas");
+  const [patientSubTab, setPatientSubTab] = useState<"consultas" | "documentos" | "recetas" | "imprimir">("consultas");
   
   // Estado de API
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
@@ -58,12 +84,50 @@ function App() {
   const [selectedPrintConsultations, setSelectedPrintConsultations] = useState<Set<number>>(new Set());
   const [printStartDate, setPrintStartDate] = useState("");
   const [printEndDate, setPrintEndDate] = useState("");
+  
+  // Estados para impresión temporal
   const [printData, setPrintData] = useState<{
     paciente: Paciente;
     consultas: Consulta[];
   } | null>(null);
 
-  // Estados de formularios
+  const [printRecipeData, setPrintRecipeData] = useState<{
+    paciente: Paciente;
+    receta: Receta;
+  } | null>(null);
+
+  // Estados Fase 2
+  const [citas, setCitas] = useState<Cita[]>([]);
+  const [configuracion, setConfiguracion] = useState({
+    doctor_nombre: "",
+    doctor_especialidad: "",
+    doctor_matricula: "",
+    firma_ruta: ""
+  });
+
+  // Estados formularios Fase 2
+  const [newCita, setNewCita] = useState({
+    paciente_id: "",
+    fecha: "",
+    hora: "",
+    duracion_minutos: 30,
+    motivo: ""
+  });
+
+  const [newReceta, setNewReceta] = useState({
+    medicamentos: "",
+    indicaciones: ""
+  });
+
+  const [doctorForm, setDoctorForm] = useState({
+    doctor_nombre: "",
+    doctor_especialidad: "",
+    doctor_matricula: ""
+  });
+
+  const [restoring, setRestoring] = useState(false);
+
+  // Estados de formularios originales
   const [newPaciente, setNewPaciente] = useState({
     nombre: "",
     apellido: "",
@@ -103,6 +167,9 @@ function App() {
           const data = await patientsRes.json();
           setPacientes(data);
         }
+        // Cargar citas y configuración
+        loadCitas();
+        loadConfiguracion();
       } else {
         setApiOnline(false);
       }
@@ -114,7 +181,38 @@ function App() {
     }
   };
 
-  // Cargar detalles de un paciente específico (con sus consultas y documentos)
+  // Cargar Citas
+  const loadCitas = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/citas`);
+      if (res.ok) {
+        const data = await res.json();
+        setCitas(data);
+      }
+    } catch (err) {
+      console.error("Error al cargar citas", err);
+    }
+  };
+
+  // Cargar Configuración
+  const loadConfiguracion = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/configuracion`);
+      if (res.ok) {
+        const data = await res.json();
+        setConfiguracion(data);
+        setDoctorForm({
+          doctor_nombre: data.doctor_nombre || "",
+          doctor_especialidad: data.doctor_especialidad || "",
+          doctor_matricula: data.doctor_matricula || ""
+        });
+      }
+    } catch (err) {
+      console.error("Error al cargar configuracion", err);
+    }
+  };
+
+  // Cargar detalles de un paciente específico (con consultas, documentos, recetas)
   const handleSelectPaciente = async (id: number) => {
     try {
       setLoading(true);
@@ -124,9 +222,54 @@ function App() {
         setSelectedPaciente(data);
       }
     } catch (err) {
-      console.error("Error al cargar detalles de paciente", err);
+      console.error("Error al cargar detalles del paciente", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Guardar configuración de datos del doctor
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE_URL}/configuracion`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(doctorForm)
+      });
+      if (res.ok) {
+        alert("Configuración del médico guardada con éxito");
+        loadConfiguracion();
+      } else {
+        alert("Error al guardar la configuración");
+      }
+    } catch (err) {
+      alert("Error de conexión");
+    }
+  };
+
+  // Subir la firma escaneada del médico
+  const handleUploadSignature = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/configuracion/firma`, {
+        method: "POST",
+        body: formData
+      });
+      if (res.ok) {
+        alert("Firma/Sello cargado con éxito");
+        loadConfiguracion();
+      } else {
+        alert("Error al subir la firma");
+      }
+    } catch (err) {
+      alert("Error de conexión");
+    } finally {
+      e.target.value = "";
     }
   };
 
@@ -190,7 +333,6 @@ function App() {
       if (res.ok) {
         alert("Consulta guardada en la historia clínica");
         setNewConsulta({ motivo: "", diagnostico: "", tratamiento: "", notas: "" });
-        // Recargar el paciente seleccionado para ver su nueva consulta
         handleSelectPaciente(selectedPaciente.id);
       } else {
         alert("Error al guardar la consulta");
@@ -200,7 +342,69 @@ function App() {
     }
   };
 
-  // Subir Archivo desde Disco
+  // Crear Receta
+  const handleCreateReceta = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaciente) return;
+    if (!newReceta.medicamentos) {
+      alert("Por favor detalla al menos un medicamento.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/recetas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newReceta,
+          paciente_id: selectedPaciente.id
+        })
+      });
+      if (res.ok) {
+        alert("Receta médica registrada en la ficha");
+        setNewReceta({ medicamentos: "", indicaciones: "" });
+        handleSelectPaciente(selectedPaciente.id);
+      } else {
+        alert("Error al guardar la receta");
+      }
+    } catch (err) {
+      alert("Error de conexión al registrar la receta");
+    }
+  };
+
+  // Eliminar Receta
+  const handleDeleteReceta = async (id: number) => {
+    if (!selectedPaciente) return;
+    if (!confirm("¿Deseas eliminar permanentemente esta receta?")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/recetas/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        alert("Receta eliminada");
+        handleSelectPaciente(selectedPaciente.id);
+      } else {
+        alert("Error al eliminar");
+      }
+    } catch (err) {
+      alert("Error de conexión");
+    }
+  };
+
+  // Imprimir Receta (Formato receta médica)
+  const handlePrintReceta = (receta: Receta) => {
+    if (!selectedPaciente) return;
+    setPrintRecipeData({
+      paciente: selectedPaciente,
+      receta: receta
+    });
+    setTimeout(() => {
+      document.body.classList.add("printing-recipe");
+      window.print();
+      document.body.classList.remove("printing-recipe");
+      setPrintRecipeData(null);
+    }, 150);
+  };
+
+  // Subir Archivo Adjunto
   const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!selectedPaciente || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
@@ -217,7 +421,6 @@ function App() {
 
       if (res.ok) {
         alert("Archivo adjunto guardado correctamente");
-        // Recargar ficha del paciente
         handleSelectPaciente(selectedPaciente.id);
       } else {
         const errorData = await res.json();
@@ -227,54 +430,168 @@ function App() {
       alert("Error de conexión al intentar subir el archivo");
     } finally {
       setUploading(false);
-      e.target.value = ""; // Reiniciar input
+      e.target.value = "";
     }
   };
 
-  // Disparar Escaneo Físico
+  // Digitalizar documento con escáner
   const handleScanDocument = async () => {
     if (!selectedPaciente) return;
-    
     try {
       setScanning(true);
       const res = await fetch(`${API_BASE_URL}/pacientes/${selectedPaciente.id}/documentos/escanear`, {
         method: "POST"
       });
-
       if (res.ok) {
-        alert("Documento digitalizado y guardado en el historial clínico");
-        // Recargar ficha del paciente
+        alert("Documento digitalizado y guardado");
         handleSelectPaciente(selectedPaciente.id);
       } else {
         const errorData = await res.json();
         alert(`Error al escanear: ${errorData.detail || "Asegúrate de tener un escáner encendido"}`);
       }
     } catch (err) {
-      alert("Error de conexión con el subsistema de escaneo");
+      alert("Error de conexión con el escáner");
     } finally {
       setScanning(false);
     }
   };
 
-  // Eliminar Archivo Adjunto
+  // Eliminar Documento
   const handleDeleteDocument = async (docId: number) => {
     if (!selectedPaciente) return;
-    if (!confirm("¿Estás seguro de que deseas eliminar permanentemente este documento del historial clínico?")) return;
+    if (!confirm("¿Deseas eliminar este documento?")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/documentos/${docId}`, { method: "DELETE" });
+      if (res.ok) {
+        alert("Documento eliminado");
+        handleSelectPaciente(selectedPaciente.id);
+      } else {
+        alert("Error al eliminar");
+      }
+    } catch (err) {
+      alert("Error de conexión");
+    }
+  };
+
+  // Crear Cita / Turno
+  const handleCreateCita = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCita.paciente_id || !newCita.fecha || !newCita.hora || !newCita.motivo) {
+      alert("Por favor completa todos los campos requeridos para el turno.");
+      return;
+    }
+
+    // Combinar fecha y hora
+    const combinedDateTime = new Date(`${newCita.fecha}T${newCita.hora}`).toISOString();
 
     try {
-      const res = await fetch(`${API_BASE_URL}/documentos/${docId}`, {
-        method: "DELETE"
+      const res = await fetch(`${API_BASE_URL}/citas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paciente_id: parseInt(newCita.paciente_id),
+          fecha_hora: combinedDateTime,
+          duracion_minutos: newCita.duracion_minutos,
+          motivo: newCita.motivo,
+          estado: "programado"
+        })
       });
 
       if (res.ok) {
-        alert("Documento eliminado con éxito");
-        // Recargar ficha del paciente
-        handleSelectPaciente(selectedPaciente.id);
+        alert("Turno programado correctamente");
+        setNewCita({ paciente_id: "", fecha: "", hora: "", duracion_minutos: 30, motivo: "" });
+        loadCitas();
       } else {
-        alert("Error al intentar eliminar el documento");
+        alert("Error al programar el turno");
       }
     } catch (err) {
-      alert("Error de conexión al intentar borrar el archivo");
+      alert("Error de conexión");
+    }
+  };
+
+  // Actualizar Estado de Cita (Atender o Cancelar)
+  const handleUpdateCitaEstado = async (id: number, estado: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/citas/${id}?estado=${estado}`, {
+        method: "PUT"
+      });
+      if (res.ok) {
+        loadCitas();
+      }
+    } catch (err) {
+      console.error("Error al actualizar turno", err);
+    }
+  };
+
+  // Atender Turno (Flujo automático)
+  const handleAttendCita = async (cita: Cita) => {
+    // 1. Marcar cita como completada
+    await handleUpdateCitaEstado(cita.id, "completada");
+    
+    // 2. Pre-llenar el motivo en el formulario de nueva consulta
+    setNewConsulta({
+      motivo: cita.motivo,
+      diagnostico: "",
+      tratamiento: "",
+      notas: ""
+    });
+
+    // 3. Seleccionar paciente y navegar a consultas clínicas
+    await handleSelectPaciente(cita.paciente_id);
+    setPatientSubTab("consultas");
+    setActiveTab("pacientes");
+  };
+
+  // Eliminar Cita de la agenda
+  const handleDeleteCita = async (id: number) => {
+    if (!confirm("¿Deseas eliminar permanentemente esta cita de la agenda?")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/citas/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        alert("Cita eliminada");
+        loadCitas();
+      }
+    } catch (err) {
+      alert("Error al eliminar cita");
+    }
+  };
+
+  // Descargar Backup (.zip)
+  const handleDownloadBackup = () => {
+    window.open(`${API_BASE_URL.replace("/api", "")}/api/backup`);
+  };
+
+  // Restaurar Backup (.zip)
+  const handleRestoreBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    
+    if (!confirm("¡ATENCIÓN! La restauración de copia reemplazará TODA la base de datos actual y los archivos subidos. La aplicación se recargará automáticamente al finalizar. ¿Deseas proceder?")) {
+      e.target.value = "";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setRestoring(true);
+      const res = await fetch(`${API_BASE_URL}/restore`, {
+        method: "POST",
+        body: formData
+      });
+      if (res.ok) {
+        alert("Copia de seguridad restaurada correctamente. Recargando la aplicación...");
+        window.location.reload();
+      } else {
+        const errorData = await res.json();
+        alert(`Error al restaurar: ${errorData.detail || "Verifica que el archivo zip sea válido"}`);
+      }
+    } catch (err) {
+      alert("Error de conexión al restaurar el respaldo");
+    } finally {
+      setRestoring(false);
+      e.target.value = "";
     }
   };
 
@@ -310,14 +627,12 @@ function App() {
     setSelectedPrintConsultations(newSelection);
   };
 
-  // Escuchar cambios en los inputs de fecha para aplicar el filtro de forma reactiva
   useEffect(() => {
     if (patientSubTab === "imprimir") {
       applyDateFilter();
     }
   }, [printStartDate, printEndDate]);
 
-  // Marcar/Desmarcar una consulta individual
   const togglePrintConsultation = (id: number) => {
     const next = new Set(selectedPrintConsultations);
     if (next.has(id)) {
@@ -328,7 +643,6 @@ function App() {
     setSelectedPrintConsultations(next);
   };
 
-  // Selección masiva
   const selectAllConsultations = () => {
     if (!selectedPaciente?.consultas) return;
     setSelectedPrintConsultations(new Set(selectedPaciente.consultas.map(c => c.id)));
@@ -338,7 +652,7 @@ function App() {
     setSelectedPrintConsultations(new Set());
   };
 
-  // Lanzar el cuadro de impresión nativo del navegador
+  // Lanzar el cuadro de impresión de historia clínica
   const handleTriggerPrint = () => {
     if (!selectedPaciente) return;
     const selectedList = (selectedPaciente.consultas || []).filter(c => 
@@ -350,20 +664,19 @@ function App() {
       return;
     }
 
-    // Ordenar cronológicamente (más viejas a más nuevas) para lectura natural de historia clínica
     const sortedList = [...selectedList].sort(
       (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
     );
 
-    // Cargar datos en la plantilla de impresión invisible
     setPrintData({
       paciente: selectedPaciente,
       consultas: sortedList
     });
 
-    // Pequeño timeout para asegurar montaje en el DOM y disparar el diálogo de Edge/Windows
     setTimeout(() => {
+      document.body.classList.add("printing-history");
       window.print();
+      document.body.classList.remove("printing-history");
       setPrintData(null);
     }, 150);
   };
@@ -395,10 +708,26 @@ function App() {
                 👤 Registrar Paciente
               </button>
             </li>
+            <li>
+              <button 
+                className={`nav-item ${activeTab === "agenda" ? "active" : ""}`}
+                onClick={() => setActiveTab("agenda")}
+              >
+                📅 Agenda y Turnos
+              </button>
+            </li>
+            <li>
+              <button 
+                className={`nav-item ${activeTab === "configuracion" ? "active" : ""}`}
+                onClick={() => setActiveTab("configuracion")}
+              >
+                ⚙️ Configuración
+              </button>
+            </li>
           </ul>
         </nav>
 
-        {/* Indicador de estado del Servidor Local */}
+        {/* Indicador de estado de API */}
         <div style={{ marginTop: "auto", padding: "10px", borderRadius: "8px", backgroundColor: apiOnline ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", border: "1px solid", borderColor: apiOnline ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)" }}>
           <span style={{ fontSize: "0.85rem", fontWeight: 600, color: apiOnline ? "rgb(16, 185, 129)" : "rgb(239, 68, 68)" }}>
             ● API Local: {apiOnline ? "Conectada" : "Desconectada"}
@@ -410,7 +739,13 @@ function App() {
       <main className="main-panel fade-in">
         {apiOnline === false && (
           <div style={{ backgroundColor: "rgba(245, 158, 11, 0.15)", border: "1px solid rgb(245, 158, 11)", borderRadius: "10px", padding: "15px", marginBottom: "20px", color: "rgb(180, 83, 9)" }}>
-            ⚠️ <strong>Servidor de API local no detectado.</strong> Por favor ejecuta el backend o arranca la aplicación en desarrollo usando el script de automatización <code>dev.bat</code> para permitir el guardado de datos.
+            ⚠️ <strong>Servidor de API local no detectado.</strong> Arranca la aplicación en desarrollo usando el script de automatización <code>dev.bat</code> para permitir el guardado de datos.
+          </div>
+        )}
+
+        {restoring && (
+          <div style={{ backgroundColor: "var(--primary-light)", border: "1px solid var(--primary)", borderRadius: "10px", padding: "20px", marginBottom: "20px", color: "var(--primary)", textAlign: "center" }}>
+            ⏳ <strong>Restaurando copia de seguridad...</strong> Por favor espera un momento mientras se restablecen las bases de datos locales y archivos.
           </div>
         )}
 
@@ -420,7 +755,7 @@ function App() {
               <div>
                 <h2 style={{ marginBottom: "1.5rem" }}>Directorio de Historias Clínicas</h2>
                 
-                {/* Caja de Búsqueda y Filtro */}
+                {/* Caja de Búsqueda */}
                 <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
                   <input
                     type="text"
@@ -517,6 +852,13 @@ function App() {
                         style={{ padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.95rem" }}
                       >
                         📁 Ficheros y Escaneos ({selectedPaciente.documentos?.length || 0})
+                      </button>
+                      <button 
+                        className={`btn ${patientSubTab === "recetas" ? "btn-primary" : "btn-secondary"}`}
+                        onClick={() => setPatientSubTab("recetas")}
+                        style={{ padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.95rem" }}
+                      >
+                        📄 Recetas Médicas ({selectedPaciente.recetas?.length || 0})
                       </button>
                       <button 
                         className={`btn ${patientSubTab === "imprimir" ? "btn-primary" : "btn-secondary"}`}
@@ -617,8 +959,6 @@ function App() {
                     {/* Contenido Pestaña 2: Ficheros y Escaneos */}
                     {patientSubTab === "documentos" && (
                       <div style={{ marginTop: "1rem" }}>
-                        
-                        {/* Panel de Carga y Escaneo */}
                         <div className="card" style={{ marginBottom: "2rem" }}>
                           <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Agregar Documentos Adjuntos</h3>
                           <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
@@ -638,7 +978,6 @@ function App() {
                               className="btn btn-secondary" 
                               onClick={() => document.getElementById("file-upload")?.click()}
                               disabled={uploading || scanning}
-                              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
                             >
                               📁 {uploading ? "Subiendo archivo..." : "Cargar Archivo (PDF/Imagen)"}
                             </button>
@@ -647,7 +986,6 @@ function App() {
                               className="btn btn-primary" 
                               onClick={handleScanDocument}
                               disabled={uploading || scanning}
-                              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
                             >
                               📸 {scanning ? "Iniciando escáner..." : "Escanear Documento Físico"}
                             </button>
@@ -661,7 +999,7 @@ function App() {
                           )}
                         </div>
 
-                        {/* Listado de Documentos del Paciente */}
+                        {/* Listado de Documentos */}
                         <div>
                           <h3 style={{ marginBottom: "1.25rem" }}>Documentos Adjuntos ({selectedPaciente.documentos?.length || 0})</h3>
                           {(!selectedPaciente.documentos || selectedPaciente.documentos.length === 0) ? (
@@ -699,20 +1037,10 @@ function App() {
                                     </div>
 
                                     <div style={{ display: "flex", gap: "0.5rem", borderTop: "1px solid var(--border-color)", paddingTop: "0.75rem" }}>
-                                      <a 
-                                        href={fileUrl} 
-                                        target="_blank" 
-                                        rel="noreferrer" 
-                                        className="btn btn-secondary" 
-                                        style={{ flex: 1, fontSize: "0.85rem", padding: "0.5rem" }}
-                                      >
+                                      <a href={fileUrl} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ flex: 1, fontSize: "0.85rem", padding: "0.5rem", textAlign: "center" }}>
                                         👁️ Abrir
                                       </a>
-                                      <button 
-                                        onClick={() => handleDeleteDocument(doc.id)} 
-                                        className="btn btn-secondary" 
-                                        style={{ flex: 1, fontSize: "0.85rem", padding: "0.5rem", color: "rgb(239, 68, 68)", borderColor: "rgba(239, 68, 68, 0.3)" }}
-                                      >
+                                      <button onClick={() => handleDeleteDocument(doc.id)} className="btn btn-secondary" style={{ flex: 1, fontSize: "0.85rem", padding: "0.5rem", color: "rgb(239, 68, 68)", borderColor: "rgba(239, 68, 68, 0.3)" }}>
                                         🗑️ Borrar
                                       </button>
                                     </div>
@@ -725,14 +1053,86 @@ function App() {
                       </div>
                     )}
 
-                    {/* Contenido Pestaña 3: Impresión Personalizada */}
+                    {/* Contenido Pestaña 3: Recetas Médicas (Fase 2) */}
+                    {patientSubTab === "recetas" && (
+                      <div style={{ marginTop: "1rem" }} className="agenda-grid">
+                        {/* Redactar Receta */}
+                        <div className="card">
+                          <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Emitir Nueva Receta</h3>
+                          <form onSubmit={handleCreateReceta}>
+                            <div className="form-group">
+                              <label className="form-label">Medicamentos y Posología *</label>
+                              <textarea
+                                className="form-input"
+                                rows={6}
+                                placeholder="Ej.&#10;- Amoxicilina 500mg: 1 comprimido cada 8hs por 7 días.&#10;- Paracetamol 1g: 1 comprimido cada 8hs en caso de fiebre."
+                                value={newReceta.medicamentos}
+                                onChange={(e) => setNewReceta({ ...newReceta, medicamentos: e.target.value })}
+                                required
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Indicaciones Adicionales / Dieta / Reposo</label>
+                              <textarea
+                                className="form-input"
+                                rows={3}
+                                placeholder="Ej. Tomar abundante agua, reposo físico por 48 horas."
+                                value={newReceta.indicaciones}
+                                onChange={(e) => setNewReceta({ ...newReceta, indicaciones: e.target.value })}
+                              />
+                            </div>
+                            <button type="submit" className="btn btn-primary" style={{ width: "100%" }}>
+                              Guardar Receta
+                            </button>
+                          </form>
+                        </div>
+
+                        {/* Listado de Recetas */}
+                        <div>
+                          <h3 style={{ marginBottom: "1.25rem" }}>Recetas Emitidas ({selectedPaciente.recetas?.length || 0})</h3>
+                          {(!selectedPaciente.recetas || selectedPaciente.recetas.length === 0) ? (
+                            <p style={{ color: "var(--text-muted)" }}>No hay recetas registradas para este paciente.</p>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                              {selectedPaciente.recetas.map((receta) => (
+                                <div key={receta.id} className="card" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem" }}>
+                                    <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 600 }}>
+                                      📅 {new Date(receta.fecha).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: "0.95rem", whiteSpace: "pre-line" }}>
+                                    <strong>Prescripción:</strong><br />
+                                    {receta.medicamentos}
+                                  </div>
+                                  {receta.indicaciones && (
+                                    <div style={{ fontSize: "0.9rem", color: "var(--text-muted)", whiteSpace: "pre-line" }}>
+                                      <strong>Indicaciones:</strong> {receta.indicaciones}
+                                    </div>
+                                  )}
+                                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", borderTop: "1px solid var(--border-color)", paddingTop: "0.5rem" }}>
+                                    <button className="btn btn-secondary" onClick={() => handlePrintReceta(receta)} style={{ flex: 1, padding: "0.4rem", fontSize: "0.85rem" }}>
+                                      🖨️ Imprimir
+                                    </button>
+                                    <button className="btn btn-secondary" onClick={() => handleDeleteReceta(receta.id)} style={{ flex: 1, padding: "0.4rem", fontSize: "0.85rem", color: "rgb(239, 68, 68)", borderColor: "rgba(239, 68, 68, 0.3)" }}>
+                                      🗑️ Borrar
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Contenido Pestaña 4: Impresión de Historia Clínica */}
                     {patientSubTab === "imprimir" && (
                       <div style={{ marginTop: "1rem" }} className="fade-in">
-                        
                         <div className="card" style={{ marginBottom: "2rem" }}>
                           <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>Configurar Documento de Impresión</h3>
                           <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
-                            Selecciona las consultas específicas que deseas imprimir. Puedes utilizar el filtro por fecha para marcar las consultas de un período determinado de forma automática.
+                            Selecciona las consultas que deseas imprimir. Puedes filtrar por fecha para marcar las consultas automáticamente.
                           </p>
 
                           {/* Filtros de Fecha */}
@@ -772,21 +1172,20 @@ function App() {
                             </span>
                           </div>
 
-                          {/* Botón de Impresión Principal */}
                           <button 
                             className="btn btn-primary" 
-                            style={{ width: "100%", padding: "0.85rem", fontSize: "1.05rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                            style={{ width: "100%", padding: "0.85rem", fontSize: "1.05rem" }}
                             onClick={handleTriggerPrint}
                           >
                             🖨️ Generar y Abrir Panel de Impresión ({selectedPrintConsultations.size})
                           </button>
                         </div>
 
-                        {/* Listado de Consultas con Checkbox */}
+                        {/* Listado de Consultas */}
                         <div>
                           <h3 style={{ marginBottom: "1.25rem" }}>Seleccionar Consultas del Historial</h3>
                           {(!selectedPaciente.consultas || selectedPaciente.consultas.length === 0) ? (
-                            <p style={{ color: "var(--text-muted)" }}>No hay consultas clínicas registradas para este paciente.</p>
+                            <p style={{ color: "var(--text-muted)" }}>No hay consultas clínicas registradas.</p>
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                               {selectedPaciente.consultas.map((consulta) => {
@@ -808,7 +1207,7 @@ function App() {
                                     <input 
                                       type="checkbox" 
                                       checked={isChecked}
-                                      onChange={() => {}} // Manejado por el click de la card
+                                      onChange={() => {}}
                                       style={{ width: "18px", height: "18px", marginTop: "0.2rem", cursor: "pointer" }}
                                     />
                                     <div style={{ flex: 1 }}>
@@ -818,7 +1217,7 @@ function App() {
                                           {new Date(consulta.fecha).toLocaleDateString()}
                                         </span>
                                       </div>
-                                      <p style={{ fontSize: "0.9rem", color: "var(--text-main)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                                      <p style={{ fontSize: "0.9rem", color: "var(--text-main)", margin: 0 }}>
                                         <strong>Evaluación:</strong> {consulta.diagnostico}
                                       </p>
                                     </div>
@@ -944,11 +1343,265 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Pantalla 3: Agenda y Calendario de Turnos (Fase 2) */}
+        {activeTab === "agenda" && (
+          <div className="fade-in">
+            <h2 style={{ marginBottom: "1.5rem" }}>📅 Agenda de Turnos Médicos</h2>
+            <div className="agenda-grid">
+              {/* Listado de Turnos */}
+              <div>
+                <h3 style={{ marginBottom: "1.25rem" }}>Turnos Agendados</h3>
+                {citas.length === 0 ? (
+                  <p style={{ color: "var(--text-muted)" }}>No hay citas médicas programadas actualmente.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    {citas.map((cita) => {
+                      const fechaCita = new Date(cita.fecha_hora);
+                      return (
+                        <div key={cita.id} className={`card cita-card ${cita.estado}`}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+                            <div>
+                              <strong style={{ fontSize: "1.1rem", color: "var(--primary)" }}>
+                                {cita.paciente?.apellido}, {cita.paciente?.nombre}
+                              </strong>
+                              <p style={{ margin: "0.2rem 0", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                                DNI: {cita.paciente?.dni}
+                              </p>
+                            </div>
+                            <span className={`status-badge ${cita.estado}`}>
+                              {cita.estado.toUpperCase()}
+                            </span>
+                          </div>
+                          
+                          <div style={{ fontSize: "0.95rem", marginBottom: "0.75rem" }}>
+                            <strong>Horario:</strong> {fechaCita.toLocaleDateString()} a las {fechaCita.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({cita.duracion_minutos} min)
+                            <br />
+                            <strong>Motivo:</strong> {cita.motivo}
+                          </div>
+
+                          <div style={{ display: "flex", gap: "0.5rem", borderTop: "1px solid var(--border-color)", paddingTop: "0.75rem" }}>
+                            {cita.estado === "programado" && (
+                              <>
+                                <button className="btn btn-primary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} onClick={() => handleAttendCita(cita)}>
+                                  Atender
+                                </button>
+                                <button className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", color: "rgb(239, 68, 68)", borderColor: "rgba(239, 68, 68, 0.2)" }} onClick={() => handleUpdateCitaEstado(cita.id, "cancelada")}>
+                                  Cancelar Cita
+                                </button>
+                              </>
+                            )}
+                            <button className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", marginLeft: "auto" }} onClick={() => handleDeleteCita(cita.id)}>
+                              🗑️ Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Programar Turno */}
+              <div className="card" style={{ height: "fit-content", position: "sticky", top: "20px" }}>
+                <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Programar Nuevo Turno</h3>
+                <form onSubmit={handleCreateCita}>
+                  <div className="form-group">
+                    <label className="form-label">Paciente *</label>
+                    <select 
+                      className="form-input" 
+                      value={newCita.paciente_id}
+                      onChange={(e) => setNewCita({ ...newCita, paciente_id: e.target.value })}
+                      required
+                    >
+                      <option value="">-- Seleccionar Paciente --</option>
+                      {pacientes.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.apellido}, {p.nombre} (DNI {p.dni})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                    <div className="form-group">
+                      <label className="form-label">Fecha *</label>
+                      <input 
+                        type="date" 
+                        className="form-input" 
+                        value={newCita.fecha}
+                        onChange={(e) => setNewCita({ ...newCita, fecha: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Hora *</label>
+                      <input 
+                        type="time" 
+                        className="form-input" 
+                        value={newCita.hora}
+                        onChange={(e) => setNewCita({ ...newCita, hora: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Duración (Minutos)</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      value={newCita.duracion_minutos}
+                      onChange={(e) => setNewCita({ ...newCita, duracion_minutos: parseInt(e.target.value) || 30 })}
+                      min="5"
+                      max="240"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Motivo del Turno *</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Ej. Chequeo mensual, dolor agudo..."
+                      value={newCita.motivo}
+                      onChange={(e) => setNewCita({ ...newCita, motivo: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: "0.5rem" }}>
+                    🗓️ Confirmar Turno
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pantalla 4: Configuración Médica y Backup (Fase 2) */}
+        {activeTab === "configuracion" && (
+          <div className="fade-in" style={{ maxWidth: "800px", margin: "0 auto" }}>
+            <h2 style={{ marginBottom: "1.5rem" }}>⚙️ Configuración del Consultorio</h2>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "2rem" }}>
+              {/* Datos Profesionales */}
+              <div className="card">
+                <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Firma y Datos del Profesional</h3>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1.25rem" }}>
+                  Esta información y tu firma cargada se estamparán de manera automática al final de todas tus recetas médicas e historias clínicas impresas.
+                </p>
+                <form onSubmit={handleSaveConfig}>
+                  <div className="form-group">
+                    <label className="form-label">Nombre del Médico (con título)</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Ej. Dr. Juan Pérez"
+                      value={doctorForm.doctor_nombre}
+                      onChange={(e) => setDoctorForm({ ...doctorForm, doctor_nombre: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Especialidad Clínica</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Ej. Cardiología y Medicina General"
+                      value={doctorForm.doctor_especialidad}
+                      onChange={(e) => setDoctorForm({ ...doctorForm, doctor_especialidad: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Matrícula / Registro Profesional</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Ej. M.N. 123456 / M.P. 789"
+                      value={doctorForm.doctor_matricula}
+                      onChange={(e) => setDoctorForm({ ...doctorForm, doctor_matricula: e.target.value })}
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-primary" style={{ width: "100%" }}>
+                    Guardar Datos
+                  </button>
+                </form>
+
+                {/* Sello / Firma */}
+                <div style={{ marginTop: "2rem", borderTop: "1px solid var(--border-color)", paddingTop: "1.5rem" }}>
+                  <label className="form-label">Cargar Firma Digitalizada (PNG con fondo blanco o transparente)</label>
+                  <input 
+                    type="file" 
+                    id="signature-upload"
+                    accept="image/*"
+                    onChange={handleUploadSignature}
+                    style={{ display: "none" }}
+                  />
+                  <button className="btn btn-secondary" style={{ width: "100%", marginTop: "0.5rem" }} onClick={() => document.getElementById("signature-upload")?.click()}>
+                    🖋️ Subir Imagen de Firma
+                  </button>
+
+                  {configuracion.firma_ruta && (
+                    <div className="signature-preview-container">
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                        Firma Activa Previsualizada:
+                      </span>
+                      <img 
+                        src={`${FILE_BASE_URL}${configuracion.firma_ruta}`} 
+                        alt="Firma del doctor" 
+                        className="signature-preview" 
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Copias de Seguridad */}
+              <div className="card" style={{ height: "fit-content" }}>
+                <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Resguardo de Información</h3>
+                <p style={{ fontSize: "0.9rem", color: "var(--text-main)", marginBottom: "1.5rem", lineHeight: 1.4 }}>
+                  Mantén a salvo el historial de tus pacientes. Exporta copias de seguridad de forma periódica. El respaldo contiene todas las fichas de pacientes, el historial de consultas, turnos de agenda y los documentos escaneados o adjuntos.
+                </p>
+                
+                <button 
+                  className="btn btn-primary" 
+                  style={{ width: "100%", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                  onClick={handleDownloadBackup}
+                  disabled={restoring}
+                >
+                  📥 Descargar Copia (.zip)
+                </button>
+
+                <div style={{ borderTop: "1px solid var(--border-color)", marginTop: "1.5rem", paddingTop: "1.5rem" }}>
+                  <label className="form-label" style={{ display: "block", marginBottom: "0.5rem" }}>
+                    Restaurar un Respaldo Anterior
+                  </label>
+                  <input 
+                    type="file" 
+                    id="restore-upload"
+                    accept=".zip"
+                    onChange={handleRestoreBackup}
+                    style={{ display: "none" }}
+                    disabled={restoring}
+                  />
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ width: "100%", borderColor: "rgba(239, 68, 68, 0.3)", color: "rgb(239, 68, 68)" }}
+                    onClick={() => document.getElementById("restore-upload")?.click()}
+                    disabled={restoring}
+                  >
+                    📤 Cargar y Restaurar Copia
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
-      {/* --- Contenedor HTML Temporal de Impresión (Invisible en Pantalla, visible en Impresora) --- */}
+      {/* --- Plantilla HTML de Impresión de Historia Clínica (Visible en Impresora) --- */}
       {printData && (
-        <div className="print-only">
+        <div className="print-history-only">
           <div className="print-header">
             <div>
               <h1 className="print-title">Registro de Historia Clínica</h1>
@@ -995,12 +1648,6 @@ function App() {
                     <div><strong>Tratamiento / Indicaciones Recetadas:</strong></div>
                     <div style={{ whiteSpace: "pre-line", marginBottom: "0.5rem", paddingLeft: "0.5rem" }}>{c.tratamiento}</div>
                     
-                    {c.notes && ( // Soporte retrocompatible
-                      <>
-                        <div><strong>Notas Adicionales:</strong></div>
-                        <div style={{ whiteSpace: "pre-line", paddingLeft: "0.5rem" }}>{c.notes}</div>
-                      </>
-                    )}
                     {c.notas && (
                       <>
                         <div><strong>Notas Adicionales:</strong></div>
@@ -1014,8 +1661,94 @@ function App() {
           )}
 
           <div className="print-footer-signature">
-            <div className="signature-box">
-              Firma y Sello del Profesional
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "220px" }}>
+              {configuracion.firma_ruta ? (
+                <img 
+                  src={`${FILE_BASE_URL}${configuracion.firma_ruta}`} 
+                  alt="Sello/Firma del doctor" 
+                  style={{ maxHeight: "80px", maxWidth: "160px", mixBlendMode: "multiply", marginBottom: "0.2rem" }} 
+                />
+              ) : (
+                <div style={{ height: "60px" }}></div>
+              )}
+              <div className="signature-box" style={{ width: "100%" }}>
+                {configuracion.doctor_nombre ? (
+                  <>
+                    <strong>{configuracion.doctor_nombre}</strong><br />
+                    <span>{configuracion.doctor_especialidad}</span><br />
+                    <span>{configuracion.doctor_matricula}</span>
+                  </>
+                ) : (
+                  <span>Firma y Sello del Profesional</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Plantilla HTML de Impresión de Receta Médica (Visible en Impresora) --- */}
+      {printRecipeData && (
+        <div className="print-recipe-only">
+          <div className="recipe-print-header">
+            <h1 className="recipe-doctor-name">
+              {configuracion.doctor_nombre || "Profesional de la Salud"}
+            </h1>
+            <p className="recipe-doctor-spec">
+              {configuracion.doctor_especialidad || "Medicina General"}
+              {configuracion.doctor_matricula && ` | ${configuracion.doctor_matricula}`}
+            </p>
+            <p style={{ margin: "0.2rem 0 0 0", fontSize: "9pt", color: "#555" }}>
+              Be-Pacient - Recetario Médico Local
+            </p>
+          </div>
+
+          <div className="recipe-patient-info">
+            <div><strong>Paciente:</strong> {printRecipeData.paciente.apellido}, {printRecipeData.paciente.nombre}</div>
+            <div><strong>DNI:</strong> {printRecipeData.paciente.dni}</div>
+            <div><strong>Fecha Nacimiento:</strong> {printRecipeData.paciente.fecha_nacimiento}</div>
+            <div><strong>Fecha Emisión:</strong> {new Date(printRecipeData.receta.fecha).toLocaleDateString()}</div>
+          </div>
+
+          <div className="recipe-body">
+            <h3 className="recipe-section-title" style={{ marginTop: 0 }}>RP / Prescripción Médica:</h3>
+            <div style={{ whiteSpace: "pre-line", paddingLeft: "0.5rem" }}>
+              {printRecipeData.receta.medicamentos}
+            </div>
+
+            {printRecipeData.receta.indicaciones && (
+              <>
+                <h3 className="recipe-section-title">Indicaciones del Paciente:</h3>
+                <div style={{ whiteSpace: "pre-line", paddingLeft: "0.5rem" }}>
+                  {printRecipeData.receta.indicaciones}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="recipe-print-footer">
+            <span>Fecha: {new Date(printRecipeData.receta.fecha).toLocaleDateString()}</span>
+            
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "220px" }}>
+              {configuracion.firma_ruta ? (
+                <img 
+                  src={`${FILE_BASE_URL}${configuracion.firma_ruta}`} 
+                  alt="Sello/Firma del doctor" 
+                  style={{ maxHeight: "80px", maxWidth: "160px", mixBlendMode: "multiply", marginBottom: "0.2rem" }} 
+                />
+              ) : (
+                <div style={{ height: "50px" }}></div>
+              )}
+              <div style={{ borderTop: "1px solid #000000", width: "100%", textAlign: "center", paddingTop: "0.4rem" }}>
+                {configuracion.doctor_nombre ? (
+                  <>
+                    <strong>{configuracion.doctor_nombre}</strong><br />
+                    <span style={{ fontSize: "8pt" }}>{configuracion.doctor_matricula}</span>
+                  </>
+                ) : (
+                  <span>Firma y Sello del Médico</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
