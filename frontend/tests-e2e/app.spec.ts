@@ -118,4 +118,32 @@ test.describe('Be-Pacient Frontend', () => {
     await expect(page.locator('label:has-text("Hasta la Fecha")')).toBeVisible();
     await expect(page.locator('button:has-text("Generar y Abrir Panel de Impresión")')).toBeVisible();
   });
+
+  test('debe permitir navegar a las nuevas secciones: Agenda y Configuración', async ({ page }) => {
+    // Interceptar llamadas para evitar fallos de red
+    await page.route('**/api/health', async route => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: "ok" }) });
+    });
+    await page.route('**/api/citas', async route => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('**/api/configuracion', async route => {
+      await route.fulfill({ 
+        status: 200, 
+        contentType: 'application/json', 
+        body: JSON.stringify({ doctor_nombre: 'Dr. House', doctor_especialidad: 'Diagnóstico', doctor_matricula: '123' }) 
+      });
+    });
+
+    // 1. Ir a Agenda
+    await page.locator('text=Agenda y Turnos').click();
+    await expect(page.locator('h2')).toContainText('Agenda de Turnos Médicos');
+    await expect(page.locator('text=Programar Nuevo Turno')).toBeVisible();
+
+    // 2. Ir a Configuración
+    await page.locator('text=Configuración').click();
+    await expect(page.locator('h2')).toContainText('Configuración del Consultorio');
+    await expect(page.locator('text=Firma y Datos del Profesional')).toBeVisible();
+    await expect(page.locator('text=Resguardo de Información')).toBeVisible();
+  });
 });
