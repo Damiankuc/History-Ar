@@ -1,7 +1,7 @@
 from typing import List, Optional
 from sqlmodel import Session, select, or_
-from .models import Paciente, Consulta, Documento
-from .schemas import PacienteCreate, PacienteBase, ConsultaCreate
+from .models import Paciente, Consulta, Documento, Configuracion, Receta, Cita
+from .schemas import PacienteCreate, PacienteBase, ConsultaCreate, ConfiguracionUpdate, RecetaCreate, CitaCreate
 
 # --- CRUD Pacientes ---
 
@@ -100,5 +100,92 @@ def delete_documento(db: Session, documento_id: int) -> bool:
     if not db_documento:
         return False
     db.delete(db_documento)
+    db.commit()
+    return True
+
+# --- CRUD Configuración ---
+
+def get_configuracion(db: Session) -> Configuracion:
+    config = db.get(Configuracion, 1)
+    if not config:
+        config = Configuracion(id=1, doctor_nombre="", doctor_especialidad="", doctor_matricula="")
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+    return config
+
+def update_configuracion(db: Session, config_in: ConfiguracionUpdate) -> Configuracion:
+    config = get_configuracion(db)
+    update_data = config_in.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(config, key, value)
+    db.add(config)
+    db.commit()
+    db.refresh(config)
+    return config
+
+def update_firma_ruta(db: Session, firma_ruta: str) -> Configuracion:
+    config = get_configuracion(db)
+    config.firma_ruta = firma_ruta
+    db.add(config)
+    db.commit()
+    db.refresh(config)
+    return config
+
+# --- CRUD Recetas ---
+
+def create_receta(db: Session, receta_in: RecetaCreate) -> Receta:
+    db_receta = Receta.model_validate(receta_in)
+    db.add(db_receta)
+    db.commit()
+    db.refresh(db_receta)
+    return db_receta
+
+def get_receta(db: Session, receta_id: int) -> Optional[Receta]:
+    return db.get(Receta, receta_id)
+
+def get_recetas_por_paciente(db: Session, paciente_id: int) -> List[Receta]:
+    statement = select(Receta).where(Receta.paciente_id == paciente_id).order_by(Receta.fecha.desc())
+    return db.exec(statement).all()
+
+def delete_receta(db: Session, receta_id: int) -> bool:
+    db_receta = db.get(Receta, receta_id)
+    if not db_receta:
+        return False
+    db.delete(db_receta)
+    db.commit()
+    return True
+
+# --- CRUD Citas ---
+
+def create_cita(db: Session, cita_in: CitaCreate) -> Cita:
+    db_cita = Cita.model_validate(cita_in)
+    db.add(db_cita)
+    db.commit()
+    db.refresh(db_cita)
+    return db_cita
+
+def get_cita(db: Session, cita_id: int) -> Optional[Cita]:
+    return db.get(Cita, cita_id)
+
+def get_citas(db: Session) -> List[Cita]:
+    statement = select(Cita).order_by(Cita.fecha_hora.asc())
+    return db.exec(statement).all()
+
+def update_cita_estado(db: Session, cita_id: int, estado: str) -> Optional[Cita]:
+    db_cita = db.get(Cita, cita_id)
+    if not db_cita:
+        return None
+    db_cita.estado = estado
+    db.add(db_cita)
+    db.commit()
+    db.refresh(db_cita)
+    return db_cita
+
+def delete_cita(db: Session, cita_id: int) -> bool:
+    db_cita = db.get(Cita, cita_id)
+    if not db_cita:
+        return False
+    db.delete(db_cita)
     db.commit()
     return True

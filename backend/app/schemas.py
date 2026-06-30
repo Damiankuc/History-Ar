@@ -33,11 +33,63 @@ class DocumentoRead(SQLModel):
     paciente_id: int
     consulta_id: Optional[int]
 
+# --- Esquemas para Configuración Médica ---
+
+class ConfiguracionRead(SQLModel):
+    id: int
+    doctor_nombre: str
+    doctor_especialidad: str
+    doctor_matricula: str
+    firma_ruta: Optional[str]
+
+class ConfiguracionUpdate(SQLModel):
+    doctor_nombre: Optional[str] = None
+    doctor_especialidad: Optional[str] = None
+    doctor_matricula: Optional[str] = None
+
+# --- Esquemas para Receta ---
+
+class RecetaCreate(SQLModel):
+    medicamentos: str
+    indicaciones: Optional[str] = None
+    paciente_id: int
+    consulta_id: Optional[int] = None
+
+class RecetaRead(SQLModel):
+    id: int
+    medicamentos: str
+    indicaciones: Optional[str]
+    fecha: datetime
+    paciente_id: int
+    consulta_id: Optional[int]
+
+# --- Esquemas para Cita ---
+
+class CitaCreate(SQLModel):
+    fecha_hora: datetime
+    duracion_minutos: int = 30
+    motivo: str
+    paciente_id: int
+    estado: str = "programado"
+
+class CitaRead(SQLModel):
+    id: int
+    fecha_hora: datetime
+    duracion_minutos: int
+    motivo: str
+    estado: str
+    paciente_id: int
+
+class CitaReadConPaciente(CitaRead):
+    paciente: PacienteRead
+
 # --- Esquemas compuestos para respuestas complejas ---
 
 class PacienteReadConConsultas(PacienteRead):
     consultas: List[ConsultaRead] = []
     documentos: List[DocumentoRead] = []
+    recetas: List[RecetaRead] = []
+    citas: List[CitaRead] = []
 
 class ConsultaReadConPaciente(ConsultaRead):
     paciente: PacienteRead
