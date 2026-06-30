@@ -3,8 +3,15 @@ from fastapi.testclient import TestClient
 from sqlmodel import SQLModel, Session, create_engine
 from sqlmodel.pool import StaticPool
 
+import sys
+import os
+
+app_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app")
+if app_dir not in sys.path:
+    sys.path.insert(0, app_dir)
+
 from app.main import app
-from app.database import get_session
+from database import get_session
 
 # Configuración de base de datos en memoria para pruebas aisladas
 @pytest.fixture(name="session")

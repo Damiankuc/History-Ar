@@ -1,7 +1,7 @@
 from typing import List, Optional
 from sqlmodel import Session, select, or_
-from .models import Paciente, Consulta, Documento, Configuracion, Receta, Cita
-from .schemas import PacienteCreate, PacienteBase, ConsultaCreate, ConfiguracionUpdate, RecetaCreate, CitaCreate
+from models import Paciente, Consulta, Documento, Configuracion, Receta, Cita
+from schemas import PacienteCreate, PacienteBase, ConsultaCreate, ConfiguracionUpdate, RecetaCreate, CitaCreate
 
 # --- CRUD Pacientes ---
 

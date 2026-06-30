@@ -13,8 +13,13 @@ import threading
 import time
 from datetime import datetime
 
-from .database import create_db_and_tables, get_session, engine, DATABASE_FILENAME
-from .schemas import (
+# Asegurar que el directorio de la app está en el path de búsqueda de Python
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+from database import create_db_and_tables, get_session, engine, DATABASE_FILENAME
+from schemas import (
     PacienteCreate,
     PacienteRead,
     PacienteReadConConsultas,
@@ -29,8 +34,8 @@ from .schemas import (
     CitaRead,
     CitaReadConPaciente
 )
-from . import crud
-from . import scanner
+import crud
+import scanner
 
 def launch_browser():
     # Esperar 2.0 segundos a que el servidor FastAPI levante
