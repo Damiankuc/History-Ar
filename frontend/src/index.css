@@ -249,3 +249,130 @@ body {
 .fade-in {
   animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
+
+/* --- Estilos de Impresión (@media print) --- */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    font-family: 'Outfit', sans-serif !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Ocultar toda la interfaz interactiva de pantalla */
+  .app-container, 
+  .sidebar, 
+  .main-panel, 
+  .btn, 
+  .form-group, 
+  input, 
+  textarea, 
+  select,
+  nav,
+  aside,
+  button,
+  .tabs-container {
+    display: none !important;
+  }
+  
+  /* Mostrar únicamente el contenedor print-only */
+  .print-only {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 1.5cm !important;
+    box-sizing: border-box !important;
+  }
+  
+  .print-header {
+    border-bottom: 2px solid #000000;
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  
+  .print-title {
+    font-size: 18pt;
+    font-weight: 700;
+    color: #000000;
+    text-transform: uppercase;
+  }
+  
+  .print-meta {
+    font-size: 9pt;
+    color: #555555;
+    text-align: right;
+  }
+  
+  .print-patient-card {
+    border: 1px solid #000000;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    background: none !important;
+  }
+  
+  .print-patient-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 1.5rem;
+    margin-top: 0.5rem;
+    font-size: 10pt;
+  }
+  
+  .print-section-title {
+    font-size: 12pt;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid #000000;
+    padding-bottom: 0.25rem;
+    page-break-after: avoid;
+  }
+  
+  .print-consultation-item {
+    border-bottom: 1px dashed #777777;
+    padding: 1rem 0;
+    page-break-inside: avoid; /* Evita cortar una consulta a la mitad */
+  }
+  
+  .print-consultation-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 11pt;
+    margin-bottom: 0.4rem;
+  }
+  
+  .print-consultation-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 10pt;
+  }
+  
+  .print-footer-signature {
+    margin-top: 3cm;
+    display: flex;
+    justify-content: flex-end;
+    page-break-inside: avoid;
+  }
+  
+  .signature-box {
+    border-top: 1px solid #000000;
+    width: 220px;
+    text-align: center;
+    padding-top: 0.4rem;
+    font-size: 9pt;
+  }
+}
+
+/* En pantalla, el contenedor de impresión está totalmente oculto */
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
