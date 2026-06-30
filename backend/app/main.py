@@ -46,14 +46,28 @@ def launch_browser():
     except Exception:
         pass
 
+# Monitoreo de actividad (Heartbeat) para evitar que quede corriendo en segundo plano
+last_heartbeat = time.time()
+
+def monitor_heartbeat():
+    # Dar 12 segundos al inicio para permitir que se abra la ventana y mande el primer latido
+    time.sleep(12.0)
+    while True:
+        time.sleep(2.0)
+        # Si han pasado más de 7 segundos sin recibir un latido, asumimos que el navegador se cerró
+        if time.time() - last_heartbeat > 7.0:
+            print("No heartbeat received from frontend. Shutting down FastAPI backend...")
+            os._exit(0)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Inicializa las tablas de SQLite en el arranque del servidor
     create_db_and_tables()
     
-    # Si la aplicación está compilada (PyInstaller), abrir el navegador en Modo App
+    # Si la aplicación está compilada (PyInstaller), abrir el navegador en Modo App y monitorear actividad
     if getattr(sys, 'frozen', False):
         threading.Thread(target=launch_browser, daemon=True).start()
+        threading.Thread(target=monitor_heartbeat, daemon=True).start()
         
     yield
 
@@ -81,6 +95,12 @@ app.add_middleware(
 def health_check():
     """Endpoint simple para verificar que la API está levantada y funcionando."""
     return {"status": "ok", "app": "Be-Pacient Backend"}
+
+@app.post("/api/heartbeat")
+def post_heartbeat():
+    global last_heartbeat
+    last_heartbeat = time.time()
+    return {"status": "ok"}
 
 @app.get("/api/pacientes", response_model=List[PacienteRead])
 def read_pacientes(
