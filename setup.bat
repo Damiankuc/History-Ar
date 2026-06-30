@@ -23,27 +23,6 @@ if %errorlevel% neq 0 (
 )
 echo [OK] Python detectado.
 
-:: 3. Verificar Rust/Cargo (temporalmente agregar la ruta de Cargo por si no se reinicio la consola)
-set "PATH=%PATH%;%USERPROFILE%\.cargo\bin"
-where cargo >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [ALERTA] Rust/Cargo no detectado. Intentando instalar Rust de forma silenciosa...
-    powershell -Command "Invoke-WebRequest -Uri 'https://win.rustup.rs/x86_64' -OutFile 'rustup-init.exe'"
-    if exist rustup-init.exe (
-        echo Instalando Rust... Por favor espera un momento.
-        rustup-init.exe -y
-        del rustup-init.exe
-        set "PATH=%PATH%;%USERPROFILE%\.cargo\bin"
-        echo [OK] Rust instalado correctamente.
-    ) else (
-        echo [ERROR] No se pudo descargar el instalador de Rust. Por favor instalalo desde https://rustup.rs/
-        pause
-        exit /b 1
-    )
-) else (
-    echo [OK] Rust/Cargo detectado.
-)
-
 echo.
 echo ===================================================
 echo   Configurando el Backend (FastAPI + SQLite)
@@ -62,7 +41,7 @@ echo [OK] Backend configurado con exito.
 
 echo.
 echo ===================================================
-echo   Configurando el Frontend (Tauri + React)
+echo   Configurando el Frontend (React)
 echo ===================================================
 cd frontend
 echo Instalando dependencias de Node.js...

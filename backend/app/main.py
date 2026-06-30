@@ -123,3 +123,14 @@ def read_consulta(consulta_id: int, db: Session = Depends(get_session)):
             detail=f"Consulta con ID {consulta_id} no encontrada"
         )
     return db_consulta
+
+# Servir archivos estáticos del frontend de React en producción
+# Solo si existe la carpeta 'static' en el directorio del backend.
+from fastapi.staticfiles import StaticFiles
+import os
+
+backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+static_dir = os.path.join(backend_root, "static")
+if os.path.exists(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
