@@ -37,6 +37,59 @@ test.describe('Be-Pacient Frontend', () => {
   });
 
   test('debe permitir ver las opciones de impresión para un paciente registrado', async ({ page }) => {
+    // Lista reactiva mockeada para pacientes
+    let pacientesMock = [];
+
+    // Interceptar llamadas de salud de la API
+    await page.route('**/api/health', async route => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: "ok" }) });
+    });
+
+    // Interceptar llamadas GET y POST de pacientes
+    await page.route('**/api/pacientes', async route => {
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const newPaciente = { 
+          id: 1, 
+          nombre: body.nombre, 
+          apellido: body.apellido, 
+          dni: body.dni, 
+          fecha_nacimiento: body.fecha_nacimiento,
+          fecha_creacion: new Date().toISOString(), 
+          consultas: [], 
+          documentos: [] 
+        };
+        pacientesMock.push(newPaciente);
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(newPaciente) });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pacientesMock) });
+      }
+    });
+
+    // Interceptar llamada de detalles del paciente
+    await page.route('**/api/pacientes/1', async route => {
+      const pacienteDetalle = {
+        id: 1,
+        nombre: 'Carlos',
+        apellido: 'Sánchez',
+        dni: '8888',
+        fecha_nacimiento: '1985-04-12',
+        fecha_creacion: new Date().toISOString(),
+        consultas: [
+          {
+            id: 101,
+            motivo: 'Chequeo General',
+            diagnostico: 'Paciente saludable',
+            tratamiento: 'Continuar dieta balanceada',
+            fecha: new Date().toISOString(),
+            paciente_id: 1
+          }
+        ],
+        documentos: []
+      };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pacienteDetalle) });
+    });
+
     // 1. Ir a registrar
     await page.locator('text=Registrar Paciente').click();
     
@@ -46,7 +99,7 @@ test.describe('Be-Pacient Frontend', () => {
     await page.locator('input').nth(2).fill('8888');
     await page.locator('input').nth(3).fill('1985-04-12');
     
-    // 3. Enviar
+    // 3. Enviar (Playwright maneja la alerta nativa y la acepta por defecto)
     await page.locator('button:has-text("Guardar Ficha del Paciente")').click();
     
     // 4. Seleccionar el paciente Carlos de la lista
