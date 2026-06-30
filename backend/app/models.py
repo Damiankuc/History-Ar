@@ -18,6 +18,8 @@ class Paciente(PacienteBase, table=True):
     
     # Relación de uno a muchos: un paciente tiene muchas consultas
     consultas: List["Consulta"] = Relationship(back_populates="paciente", cascade_delete=True)
+    # Relación de uno a muchos: un paciente tiene muchos documentos
+    documentos: List["Documento"] = Relationship(back_populates="paciente", cascade_delete=True)
 
 class ConsultaBase(SQLModel):
     motivo: str
@@ -32,3 +34,18 @@ class Consulta(ConsultaBase, table=True):
     
     # Relación inversa: la consulta pertenece a un paciente
     paciente: Paciente = Relationship(back_populates="consultas")
+    # Relación: una consulta puede tener asociados varios documentos
+    documentos: List["Documento"] = Relationship(back_populates="consulta")
+
+class Documento(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    nombre: str
+    ruta_archivo: str  # Ruta relativa en el disco
+    tipo_mimetype: str  # pdf, image/jpeg, png, etc.
+    fecha_subida: datetime = Field(default_factory=datetime.utcnow)
+    
+    paciente_id: int = Field(foreign_key="paciente.id")
+    paciente: Paciente = Relationship(back_populates="documentos")
+    
+    consulta_id: Optional[int] = Field(default=None, foreign_key="consulta.id")
+    consulta: Optional[Consulta] = Relationship(back_populates="documentos")

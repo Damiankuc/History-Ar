@@ -115,3 +115,35 @@ def test_create_consulta_and_get_history(client: TestClient):
     history_data = res_history.json()
     assert len(history_data["consultas"]) == 1
     assert history_data["consultas"][0]["diagnostico"] == "Migraña común"
+
+def test_upload_and_delete_documento(client: TestClient):
+    # 1. Registrar paciente
+    res_paciente = client.post("/api/pacientes", json={"nombre": "Juan", "apellido": "Pérez", "dni": "999", "fecha_nacimiento": "1980-05-15"})
+    paciente_id = res_paciente.json()["id"]
+
+    # 2. Subir un archivo de prueba
+    file_data = {"file": ("historia.pdf", b"mock pdf content bytes", "application/pdf")}
+    res_upload = client.post(f"/api/pacientes/{paciente_id}/documentos/subir", files=file_data)
+    assert res_upload.status_code == 201
+    
+    doc_data = res_upload.json()
+    assert doc_data["nombre"] == "historia.pdf"
+    assert doc_data["tipo_mimetype"] == "application/pdf"
+    assert "ruta_archivo" in doc_data
+    doc_id = doc_data["id"]
+
+    # 3. Verificar que aparece en la historia del paciente
+    res_history = client.get(f"/api/pacientes/{paciente_id}")
+    history_data = res_history.json()
+    assert len(history_data["documentos"]) == 1
+    assert history_data["documentos"][0]["nombre"] == "historia.pdf"
+
+    # 4. Eliminar el documento
+    res_delete = client.delete(f"/api/documentos/{doc_id}")
+    assert res_delete.status_code == 200
+    assert res_delete.json() == {"message": "Documento eliminado con éxito"}
+
+    # 5. Verificar que se eliminó de la historia del paciente
+    res_history2 = client.get(f"/api/pacientes/{paciente_id}")
+    assert len(res_history2.json()["documentos"]) == 0
+

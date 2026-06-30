@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlmodel import Session, select, or_
-from .models import Paciente, Consulta
+from .models import Paciente, Consulta, Documento
 from .schemas import PacienteCreate, PacienteBase, ConsultaCreate
 
 # --- CRUD Pacientes ---
@@ -72,3 +72,33 @@ def get_consulta(db: Session, consulta_id: int) -> Optional[Consulta]:
 def get_consultas_por_paciente(db: Session, paciente_id: int) -> List[Consulta]:
     statement = select(Consulta).where(Consulta.paciente_id == paciente_id).order_by(Consulta.fecha.desc())
     return db.exec(statement).all()
+
+# --- CRUD Documentos ---
+
+def create_documento(db: Session, nombre: str, ruta_archivo: str, tipo_mimetype: str, paciente_id: int, consulta_id: Optional[int] = None) -> Documento:
+    db_documento = Documento(
+        nombre=nombre,
+        ruta_archivo=ruta_archivo,
+        tipo_mimetype=tipo_mimetype,
+        paciente_id=paciente_id,
+        consulta_id=consulta_id
+    )
+    db.add(db_documento)
+    db.commit()
+    db.refresh(db_documento)
+    return db_documento
+
+def get_documento(db: Session, documento_id: int) -> Optional[Documento]:
+    return db.get(Documento, documento_id)
+
+def get_documentos_por_paciente(db: Session, paciente_id: int) -> List[Documento]:
+    statement = select(Documento).where(Documento.paciente_id == paciente_id).order_by(Documento.fecha_subida.desc())
+    return db.exec(statement).all()
+
+def delete_documento(db: Session, documento_id: int) -> bool:
+    db_documento = db.get(Documento, documento_id)
+    if not db_documento:
+        return False
+    db.delete(db_documento)
+    db.commit()
+    return True

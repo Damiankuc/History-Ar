@@ -11,6 +11,16 @@ interface Consulta {
   paciente_id: number;
 }
 
+interface Documento {
+  id: number;
+  nombre: string;
+  ruta_archivo: string;
+  tipo_mimetype: string;
+  fecha_subida: string;
+  paciente_id: number;
+  consulta_id?: number;
+}
+
 interface Paciente {
   id: number;
   nombre: string;
@@ -23,11 +33,15 @@ interface Paciente {
   notas_generales?: string;
   fecha_creacion: string;
   consultas?: Consulta[];
+  documentos?: Documento[];
 }
 
 function App() {
-  // Estado de navegación
+  // Estado de navegación principal
   const [activeTab, setActiveTab] = useState<"pacientes" | "nuevo-paciente">("pacientes");
+  
+  // Estado de sub-tab en ficha de paciente
+  const [patientSubTab, setPatientSubTab] = useState<"consultas" | "documentos">("consultas");
   
   // Estado de API
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
@@ -35,6 +49,10 @@ function App() {
   const [selectedPaciente, setSelectedPaciente] = useState<Paciente | null>(null);
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Estados de carga de archivos y escaneo
+  const [uploading, setUploading] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   // Estados de formularios
   const [newPaciente, setNewPaciente] = useState({
@@ -56,6 +74,7 @@ function App() {
   });
 
   const API_BASE_URL = "http://localhost:8000/api";
+  const FILE_BASE_URL = "http://localhost:8000";
 
   // Verificar estado del Backend y cargar pacientes
   useEffect(() => {
@@ -86,7 +105,7 @@ function App() {
     }
   };
 
-  // Cargar detalles de un paciente específico (con sus consultas)
+  // Cargar detalles de un paciente específico (con sus consultas y documentos)
   const handleSelectPaciente = async (id: number) => {
     try {
       setLoading(true);
@@ -96,7 +115,7 @@ function App() {
         setSelectedPaciente(data);
       }
     } catch (err) {
-      console.error("Error al cargar consultas", err);
+      console.error("Error al cargar detalles de paciente", err);
     } finally {
       setLoading(false);
     }
@@ -169,6 +188,84 @@ function App() {
       }
     } catch (err) {
       alert("Error de conexión al guardar la consulta");
+    }
+  };
+
+  // Subir Archivo desde Disco
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedPaciente || !e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setUploading(true);
+      const res = await fetch(`${API_BASE_URL}/pacientes/${selectedPaciente.id}/documentos/subir`, {
+        method: "POST",
+        body: formData
+      });
+
+      if (res.ok) {
+        alert("Archivo adjunto guardado correctamente");
+        // Recargar ficha del paciente
+        handleSelectPaciente(selectedPaciente.id);
+      } else {
+        const errorData = await res.json();
+        alert(`Error al subir: ${errorData.detail || "Inténtalo de nuevo"}`);
+      }
+    } catch (err) {
+      alert("Error de conexión al intentar subir el archivo");
+    } finally {
+      setUploading(false);
+      e.target.value = ""; // Reiniciar input
+    }
+  };
+
+  // Disparar Escaneo Físico
+  const handleScanDocument = async () => {
+    if (!selectedPaciente) return;
+    
+    try {
+      setScanning(true);
+      const res = await fetch(`${API_BASE_URL}/pacientes/${selectedPaciente.id}/documentos/escanear`, {
+        method: "POST"
+      });
+
+      if (res.ok) {
+        alert("Documento digitalizado y guardado en el historial clínico");
+        // Recargar ficha del paciente
+        handleSelectPaciente(selectedPaciente.id);
+      } else {
+        const errorData = await res.json();
+        alert(`Error al escanear: ${errorData.detail || "Asegúrate de tener un escáner encendido"}`);
+      }
+    } catch (err) {
+      alert("Error de conexión con el subsistema de escaneo");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  // Eliminar Archivo Adjunto
+  const handleDeleteDocument = async (docId: number) => {
+    if (!selectedPaciente) return;
+    if (!confirm("¿Estás seguro de que deseas eliminar permanentemente este documento del historial clínico?")) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/documentos/${docId}`, {
+        method: "DELETE"
+      });
+
+      if (res.ok) {
+        alert("Documento eliminado con éxito");
+        // Recargar ficha del paciente
+        handleSelectPaciente(selectedPaciente.id);
+      } else {
+        alert("Error al intentar eliminar el documento");
+      }
+    } catch (err) {
+      alert("Error de conexión al intentar borrar el archivo");
     }
   };
 
@@ -251,14 +348,14 @@ function App() {
                 ) : (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
                     {pacientes.map((paciente) => (
-                      <div key={paciente.id} className="card" style={{ cursor: "pointer" }} onClick={() => handleSelectPaciente(paciente.id)}>
+                      <div key={paciente.id} className="card" style={{ cursor: "pointer" }} onClick={() => { handleSelectPaciente(paciente.id); setPatientSubTab("consultas"); }}>
                         <h3 style={{ color: "var(--primary)", marginBottom: "0.5rem" }}>
                           {paciente.apellido}, {paciente.nombre}
                         </h3>
-                        <p style={{ fontSize: "0.95rem", color: varName => "var(--text-main)", marginBottom: "0.25rem" }}>
+                        <p style={{ fontSize: "0.95rem", color: "var(--text-main)", marginBottom: "0.25rem" }}>
                           <strong>DNI:</strong> {paciente.dni}
                         </p>
-                        <p style={{ fontSize: "0.95rem", color: varName => "var(--text-muted)" }}>
+                        <p style={{ fontSize: "0.95rem", color: "var(--text-muted)" }}>
                           <strong>Nacimiento:</strong> {paciente.fecha_nacimiento}
                         </p>
                         <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
@@ -278,11 +375,11 @@ function App() {
                   ← Volver al Listado
                 </button>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "2rem" }}>
-                  {/* Ficha del Paciente */}
+                <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: "2rem" }}>
+                  {/* Ficha del Paciente (Sticky a la izquierda) */}
                   <div>
                     <div className="card" style={{ position: "sticky", top: "20px" }}>
-                      <h2 style={{ color: "var(--primary)", marginBottom: "1rem" }}>
+                      <h2 style={{ color: "var(--primary)", marginBottom: "1rem", fontSize: "1.5rem" }}>
                         {selectedPaciente.nombre} {selectedPaciente.apellido}
                       </h2>
                       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.95rem" }}>
@@ -303,89 +400,228 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Historial Clínico y Registro */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-                    {/* Formulario Nueva Consulta */}
-                    <div className="card">
-                      <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Registrar Nueva Consulta</h3>
-                      <form onSubmit={handleCreateConsulta}>
-                        <div className="form-group">
-                          <label className="form-label">Motivo de Consulta *</label>
-                          <input
-                            type="text"
-                            className="form-input"
-                            placeholder="Ej. Control anual, dolor lumbar..."
-                            value={newConsulta.motivo}
-                            onChange={(e) => setNewConsulta({ ...newConsulta, motivo: e.target.value })}
-                            required
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Diagnóstico / Evaluación *</label>
-                          <textarea
-                            className="form-input"
-                            rows={3}
-                            placeholder="Descripción de los síntomas y diagnóstico..."
-                            value={newConsulta.diagnostico}
-                            onChange={(e) => setNewConsulta({ ...newConsulta, diagnostico: e.target.value })}
-                            style={{ resize: "vertical" }}
-                            required
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Tratamiento / Receta *</label>
-                          <textarea
-                            className="form-input"
-                            rows={3}
-                            placeholder="Medicamentos indicados, reposo, estudios solicitados..."
-                            value={newConsulta.tratamiento}
-                            onChange={(e) => setNewConsulta({ ...newConsulta, tratamiento: e.target.value })}
-                            style={{ resize: "vertical" }}
-                            required
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Notas Adicionales</label>
-                          <textarea
-                            className="form-input"
-                            rows={2}
-                            placeholder="Comentarios extras confidenciales..."
-                            value={newConsulta.notas}
-                            onChange={(e) => setNewConsulta({ ...newConsulta, notas: e.target.value })}
-                            style={{ resize: "vertical" }}
-                          />
-                        </div>
-                        <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: "0.5rem" }}>
-                          Guardar Registro de Consulta
-                        </button>
-                      </form>
+                  {/* Panel Clínico (Pestañas de Consultas / Documentos a la derecha) */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    
+                    {/* Barra de Sub-Pestañas */}
+                    <div style={{ display: "flex", gap: "0.75rem", borderBottom: "2px solid var(--border-color)", paddingBottom: "0.5rem" }}>
+                      <button 
+                        className={`btn ${patientSubTab === "consultas" ? "btn-primary" : "btn-secondary"}`}
+                        onClick={() => setPatientSubTab("consultas")}
+                        style={{ padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.95rem" }}
+                      >
+                        📋 Consultas Médicas
+                      </button>
+                      <button 
+                        className={`btn ${patientSubTab === "documentos" ? "btn-primary" : "btn-secondary"}`}
+                        onClick={() => setPatientSubTab("documentos")}
+                        style={{ padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.95rem" }}
+                      >
+                        📁 Ficheros y Escaneos ({selectedPaciente.documentos?.length || 0})
+                      </button>
                     </div>
 
-                    {/* Línea de tiempo de Consultas anteriores */}
-                    <div>
-                      <h3 style={{ marginBottom: "1.25rem" }}>Historial Clínico ({selectedPaciente.consultas?.length || 0})</h3>
-                      {(!selectedPaciente.consultas || selectedPaciente.consultas.length === 0) ? (
-                        <p style={{ color: "var(--text-muted)" }}>No hay consultas previas registradas para este paciente.</p>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                          {selectedPaciente.consultas.map((consulta) => (
-                            <div key={consulta.id} className="card">
-                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.75rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem" }}>
-                                <strong style={{ color: "var(--primary)" }}>{consulta.motivo}</strong>
-                                <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                                  {new Date(consulta.fecha).toLocaleDateString()} {new Date(consulta.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              </div>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.95rem" }}>
-                                <p><strong>Diagnóstico:</strong> {consulta.diagnostico}</p>
-                                <p><strong>Tratamiento:</strong> {consulta.tratamiento}</p>
-                                {consulta.notas && <p><strong>Notas:</strong> <span style={{ color: "var(--text-muted)" }}>{consulta.notas}</span></p>}
-                              </div>
+                    {/* Contenido Pestaña 1: Consultas Clínicas */}
+                    {patientSubTab === "consultas" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2rem", marginTop: "1rem" }}>
+                        {/* Formulario Nueva Consulta */}
+                        <div className="card">
+                          <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Registrar Nueva Consulta</h3>
+                          <form onSubmit={handleCreateConsulta}>
+                            <div className="form-group">
+                              <label className="form-label">Motivo de Consulta *</label>
+                              <input
+                                type="text"
+                                className="form-input"
+                                placeholder="Ej. Control anual, dolor lumbar..."
+                                value={newConsulta.motivo}
+                                onChange={(e) => setNewConsulta({ ...newConsulta, motivo: e.target.value })}
+                                required
+                              />
                             </div>
-                          ))}
+                            <div className="form-group">
+                              <label className="form-label">Diagnóstico / Evaluación *</label>
+                              <textarea
+                                className="form-input"
+                                rows={3}
+                                placeholder="Descripción de los síntomas y diagnóstico..."
+                                value={newConsulta.diagnostico}
+                                onChange={(e) => setNewConsulta({ ...newConsulta, diagnostico: e.target.value })}
+                                style={{ resize: "vertical" }}
+                                required
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Tratamiento / Receta *</label>
+                              <textarea
+                                className="form-input"
+                                rows={3}
+                                placeholder="Medicamentos indicados, reposo, estudios solicitados..."
+                                value={newConsulta.tratamiento}
+                                onChange={(e) => setNewConsulta({ ...newConsulta, tratamiento: e.target.value })}
+                                style={{ resize: "vertical" }}
+                                required
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Notas Adicionales</label>
+                              <textarea
+                                className="form-input"
+                                rows={2}
+                                placeholder="Comentarios extras confidenciales..."
+                                value={newConsulta.notes} // Enlace correcto
+                                onChange={(e) => setNewConsulta({ ...newConsulta, notas: e.target.value })}
+                                style={{ resize: "vertical" }}
+                              />
+                            </div>
+                            <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: "0.5rem" }}>
+                              Guardar Registro de Consulta
+                            </button>
+                          </form>
                         </div>
-                      )}
-                    </div>
+
+                        {/* Historial Clínico de Consultas */}
+                        <div>
+                          <h3 style={{ marginBottom: "1.25rem" }}>Historial Clínico ({selectedPaciente.consultas?.length || 0})</h3>
+                          {(!selectedPaciente.consultas || selectedPaciente.consultas.length === 0) ? (
+                            <p style={{ color: "var(--text-muted)" }}>No hay consultas previas registradas para este paciente.</p>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                              {selectedPaciente.consultas.map((consulta) => (
+                                <div key={consulta.id} className="card">
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.75rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem" }}>
+                                    <strong style={{ color: "var(--primary)" }}>{consulta.motivo}</strong>
+                                    <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                                      {new Date(consulta.fecha).toLocaleDateString()} {new Date(consulta.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.95rem" }}>
+                                    <p><strong>Diagnóstico:</strong> {consulta.diagnostico}</p>
+                                    <p><strong>Tratamiento:</strong> {consulta.tratamiento}</p>
+                                    {consulta.notas && <p><strong>Notas:</strong> <span style={{ color: "var(--text-muted)" }}>{consulta.notas}</span></p>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Contenido Pestaña 2: Ficheros y Escaneos */}
+                    {patientSubTab === "documentos" && (
+                      <div style={{ marginTop: "1rem" }}>
+                        
+                        {/* Panel de Carga y Escaneo */}
+                        <div className="card" style={{ marginBottom: "2rem" }}>
+                          <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Agregar Documentos Adjuntos</h3>
+                          <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
+                            Puedes subir estudios en formato PDF/Imagen o escanear una receta u hoja médica física directamente utilizando tu escáner o impresora multifunción conectada.
+                          </p>
+
+                          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                            {/* Input Oculto de Archivos */}
+                            <input
+                              type="file"
+                              id="file-upload"
+                              onChange={handleUploadFile}
+                              style={{ display: "none" }}
+                              accept="image/*,.pdf"
+                            />
+                            
+                            <button 
+                              className="btn btn-secondary" 
+                              onClick={() => document.getElementById("file-upload")?.click()}
+                              disabled={uploading || scanning}
+                              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+                            >
+                              📁 {uploading ? "Subiendo archivo..." : "Cargar Archivo (PDF/Imagen)"}
+                            </button>
+
+                            <button 
+                              className="btn btn-primary" 
+                              onClick={handleScanDocument}
+                              disabled={uploading || scanning}
+                              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+                            >
+                              📸 {scanning ? "Iniciando escáner..." : "Escanear Documento Físico"}
+                            </button>
+                          </div>
+
+                          {/* Notificaciones de progreso del escáner */}
+                          {scanning && (
+                            <div style={{ marginTop: "1.5rem", padding: "12px", backgroundColor: "var(--primary-light)", borderRadius: "8px", border: "1px solid var(--primary)", color: "var(--primary)", fontSize: "0.95rem", animation: "pulse 2s infinite" }}>
+                              ⏳ <strong>Conectando con el digitalizador de Windows (WIA)...</strong><br />
+                              Por favor selecciona tu escáner y presiona "Escanear" en el diálogo emergente del sistema.
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Listado de Documentos del Paciente */}
+                        <div>
+                          <h3 style={{ marginBottom: "1.25rem" }}>Documentos Adjuntos ({selectedPaciente.documentos?.length || 0})</h3>
+                          {(!selectedPaciente.documentos || selectedPaciente.documentos.length === 0) ? (
+                            <p style={{ color: "var(--text-muted)" }}>No hay archivos adjuntos guardados para este paciente.</p>
+                          ) : (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+                              {selectedPaciente.documentos.map((doc) => {
+                                const fileUrl = `${FILE_BASE_URL}${doc.ruta_archivo}`;
+                                const isImage = doc.tipo_mimetype.startsWith("image/");
+                                
+                                return (
+                                  <div key={doc.id} className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "1rem" }}>
+                                    <div>
+                                      {/* Previsualización rápida si es imagen */}
+                                      {isImage ? (
+                                        <div style={{ width: "100%", height: "130px", borderRadius: "6px", overflow: "hidden", backgroundColor: "rgba(0,0,0,0.03)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "0.75rem", border: "1px solid var(--border-color)" }}>
+                                          <img 
+                                            src={fileUrl} 
+                                            alt={doc.nombre} 
+                                            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} 
+                                          />
+                                        </div>
+                                      ) : (
+                                        // Icono representativo para PDFs/Otros
+                                        <div style={{ width: "100%", height: "130px", borderRadius: "6px", backgroundColor: "var(--primary-light)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginBottom: "0.75rem", border: "1px dashed var(--primary)" }}>
+                                          <span style={{ fontSize: "2.5rem" }}>📄</span>
+                                          <span style={{ fontSize: "0.85rem", color: "var(--primary)", fontWeight: 600 }}>DOCUMENTO PDF</span>
+                                        </div>
+                                      )}
+
+                                      <h4 style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-main)", wordBreak: "break-all" }}>
+                                        {doc.nombre}
+                                      </h4>
+                                      <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                                        Cargado el: {new Date(doc.fecha_subida).toLocaleDateString()}
+                                      </p>
+                                    </div>
+
+                                    <div style={{ display: "flex", gap: "0.5rem", borderTop: "1px solid var(--border-color)", paddingTop: "0.75rem" }}>
+                                      <a 
+                                        href={fileUrl} 
+                                        target="_blank" 
+                                        rel="noreferrer" 
+                                        className="btn btn-secondary" 
+                                        style={{ flex: 1, fontSize: "0.85rem", padding: "0.5rem" }}
+                                      >
+                                        👁️ Abrir
+                                      </a>
+                                      <button 
+                                        onClick={() => handleDeleteDocument(doc.id)} 
+                                        className="btn btn-secondary" 
+                                        style={{ flex: 1, fontSize: "0.85rem", padding: "0.5rem", color: "rgb(239, 68, 68)", borderColor: "rgba(239, 68, 68, 0.3)" }}
+                                      >
+                                        🗑️ Borrar
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
