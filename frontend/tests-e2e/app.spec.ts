@@ -35,4 +35,34 @@ test.describe('Be-Pacient Frontend', () => {
     await expect(page.locator('label:has-text("Apellido *")')).toBeVisible();
     await expect(page.locator('label:has-text("DNI (Identificación Única) *")')).toBeVisible();
   });
+
+  test('debe permitir ver las opciones de impresión para un paciente registrado', async ({ page }) => {
+    // 1. Ir a registrar
+    await page.locator('text=Registrar Paciente').click();
+    
+    // 2. Llenar datos
+    await page.locator('input').nth(0).fill('Carlos');
+    await page.locator('input').nth(1).fill('Sánchez');
+    await page.locator('input').nth(2).fill('8888');
+    await page.locator('input').nth(3).fill('1985-04-12');
+    
+    // 3. Enviar
+    await page.locator('button:has-text("Guardar Ficha del Paciente")').click();
+    
+    // 4. Seleccionar el paciente Carlos de la lista
+    const pacienteCard = page.locator('text=Sánchez, Carlos');
+    await expect(pacienteCard).toBeVisible();
+    await pacienteCard.click();
+    
+    // 5. Hacer clic en la pestaña de impresión
+    const printTab = page.locator('button:has-text("Imprimir Historia")');
+    await expect(printTab).toBeVisible();
+    await printTab.click();
+    
+    // 6. Verificar que los controles de impresión están cargados
+    await expect(page.locator('text=Configurar Documento de Impresión')).toBeVisible();
+    await expect(page.locator('label:has-text("Desde la Fecha")')).toBeVisible();
+    await expect(page.locator('label:has-text("Hasta la Fecha")')).toBeVisible();
+    await expect(page.locator('button:has-text("Generar y Abrir Panel de Impresión")')).toBeVisible();
+  });
 });

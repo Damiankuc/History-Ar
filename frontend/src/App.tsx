@@ -41,7 +41,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<"pacientes" | "nuevo-paciente">("pacientes");
   
   // Estado de sub-tab en ficha de paciente
-  const [patientSubTab, setPatientSubTab] = useState<"consultas" | "documentos">("consultas");
+  const [patientSubTab, setPatientSubTab] = useState<"consultas" | "documentos" | "imprimir">("consultas");
   
   // Estado de API
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
@@ -53,6 +53,15 @@ function App() {
   // Estados de carga de archivos y escaneo
   const [uploading, setUploading] = useState(false);
   const [scanning, setScanning] = useState(false);
+
+  // Estados de Impresión
+  const [selectedPrintConsultations, setSelectedPrintConsultations] = useState<Set<number>>(new Set());
+  const [printStartDate, setPrintStartDate] = useState("");
+  const [printEndDate, setPrintEndDate] = useState("");
+  const [printData, setPrintData] = useState<{
+    paciente: Paciente;
+    consultas: Consulta[];
+  } | null>(null);
 
   // Estados de formularios
   const [newPaciente, setNewPaciente] = useState({
@@ -269,6 +278,96 @@ function App() {
     }
   };
 
+  // Inicializar casillas marcadas con todas las consultas al abrir la pestaña de impresión
+  useEffect(() => {
+    if (patientSubTab === "imprimir" && selectedPaciente?.consultas) {
+      const allIds = selectedPaciente.consultas.map(c => c.id);
+      setSelectedPrintConsultations(new Set(allIds));
+      setPrintStartDate("");
+      setPrintEndDate("");
+    }
+  }, [patientSubTab, selectedPaciente?.id]);
+
+  // Aplicar filtro de fecha sobre la selección de consultas
+  const applyDateFilter = () => {
+    if (!selectedPaciente || !selectedPaciente.consultas) return;
+    const start = printStartDate ? new Date(printStartDate) : null;
+    const end = printEndDate ? new Date(printEndDate) : null;
+    
+    if (start) start.setHours(0, 0, 0, 0);
+    if (end) end.setHours(23, 59, 59, 999);
+
+    const newSelection = new Set<number>();
+    selectedPaciente.consultas.forEach(c => {
+      const fecha = new Date(c.fecha);
+      let match = true;
+      if (start && fecha < start) match = false;
+      if (end && fecha > end) match = false;
+      if (match) {
+        newSelection.add(c.id);
+      }
+    });
+    setSelectedPrintConsultations(newSelection);
+  };
+
+  // Escuchar cambios en los inputs de fecha para aplicar el filtro de forma reactiva
+  useEffect(() => {
+    if (patientSubTab === "imprimir") {
+      applyDateFilter();
+    }
+  }, [printStartDate, printEndDate]);
+
+  // Marcar/Desmarcar una consulta individual
+  const togglePrintConsultation = (id: number) => {
+    const next = new Set(selectedPrintConsultations);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedPrintConsultations(next);
+  };
+
+  // Selección masiva
+  const selectAllConsultations = () => {
+    if (!selectedPaciente?.consultas) return;
+    setSelectedPrintConsultations(new Set(selectedPaciente.consultas.map(c => c.id)));
+  };
+
+  const deselectAllConsultations = () => {
+    setSelectedPrintConsultations(new Set());
+  };
+
+  // Lanzar el cuadro de impresión nativo del navegador
+  const handleTriggerPrint = () => {
+    if (!selectedPaciente) return;
+    const selectedList = (selectedPaciente.consultas || []).filter(c => 
+      selectedPrintConsultations.has(c.id)
+    );
+
+    if (selectedList.length === 0) {
+      alert("Por favor, selecciona al menos una consulta médica para realizar la impresión.");
+      return;
+    }
+
+    // Ordenar cronológicamente (más viejas a más nuevas) para lectura natural de historia clínica
+    const sortedList = [...selectedList].sort(
+      (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+    );
+
+    // Cargar datos en la plantilla de impresión invisible
+    setPrintData({
+      paciente: selectedPaciente,
+      consultas: sortedList
+    });
+
+    // Pequeño timeout para asegurar montaje en el DOM y disparar el diálogo de Edge/Windows
+    setTimeout(() => {
+      window.print();
+      setPrintData(null);
+    }, 150);
+  };
+
   return (
     <div className="app-container">
       {/* Sidebar de Navegación */}
@@ -400,11 +499,11 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Panel Clínico (Pestañas de Consultas / Documentos a la derecha) */}
+                  {/* Panel Clínico (Pestañas a la derecha) */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                     
                     {/* Barra de Sub-Pestañas */}
-                    <div style={{ display: "flex", gap: "0.75rem", borderBottom: "2px solid var(--border-color)", paddingBottom: "0.5rem" }}>
+                    <div className="tabs-container" style={{ display: "flex", gap: "0.5rem", borderBottom: "2px solid var(--border-color)", paddingBottom: "0.5rem", flexWrap: "wrap" }}>
                       <button 
                         className={`btn ${patientSubTab === "consultas" ? "btn-primary" : "btn-secondary"}`}
                         onClick={() => setPatientSubTab("consultas")}
@@ -418,6 +517,13 @@ function App() {
                         style={{ padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.95rem" }}
                       >
                         📁 Ficheros y Escaneos ({selectedPaciente.documentos?.length || 0})
+                      </button>
+                      <button 
+                        className={`btn ${patientSubTab === "imprimir" ? "btn-primary" : "btn-secondary"}`}
+                        onClick={() => setPatientSubTab("imprimir")}
+                        style={{ padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.95rem" }}
+                      >
+                        🖨️ Imprimir Historia
                       </button>
                     </div>
 
@@ -469,7 +575,7 @@ function App() {
                                 className="form-input"
                                 rows={2}
                                 placeholder="Comentarios extras confidenciales..."
-                                value={newConsulta.notes} // Enlace correcto
+                                value={newConsulta.notas}
                                 onChange={(e) => setNewConsulta({ ...newConsulta, notas: e.target.value })}
                                 style={{ resize: "vertical" }}
                               />
@@ -520,7 +626,6 @@ function App() {
                           </p>
 
                           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                            {/* Input Oculto de Archivos */}
                             <input
                               type="file"
                               id="file-upload"
@@ -548,9 +653,8 @@ function App() {
                             </button>
                           </div>
 
-                          {/* Notificaciones de progreso del escáner */}
                           {scanning && (
-                            <div style={{ marginTop: "1.5rem", padding: "12px", backgroundColor: "var(--primary-light)", borderRadius: "8px", border: "1px solid var(--primary)", color: "var(--primary)", fontSize: "0.95rem", animation: "pulse 2s infinite" }}>
+                            <div style={{ marginTop: "1.5rem", padding: "12px", backgroundColor: "var(--primary-light)", borderRadius: "8px", border: "1px solid var(--primary)", color: "var(--primary)", fontSize: "0.95rem" }}>
                               ⏳ <strong>Conectando con el digitalizador de Windows (WIA)...</strong><br />
                               Por favor selecciona tu escáner y presiona "Escanear" en el diálogo emergente del sistema.
                             </div>
@@ -571,7 +675,6 @@ function App() {
                                 return (
                                   <div key={doc.id} className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "1rem" }}>
                                     <div>
-                                      {/* Previsualización rápida si es imagen */}
                                       {isImage ? (
                                         <div style={{ width: "100%", height: "130px", borderRadius: "6px", overflow: "hidden", backgroundColor: "rgba(0,0,0,0.03)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "0.75rem", border: "1px solid var(--border-color)" }}>
                                           <img 
@@ -581,7 +684,6 @@ function App() {
                                           />
                                         </div>
                                       ) : (
-                                        // Icono representativo para PDFs/Otros
                                         <div style={{ width: "100%", height: "130px", borderRadius: "6px", backgroundColor: "var(--primary-light)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginBottom: "0.75rem", border: "1px dashed var(--primary)" }}>
                                           <span style={{ fontSize: "2.5rem" }}>📄</span>
                                           <span style={{ fontSize: "0.85rem", color: "var(--primary)", fontWeight: 600 }}>DOCUMENTO PDF</span>
@@ -613,6 +715,112 @@ function App() {
                                       >
                                         🗑️ Borrar
                                       </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Contenido Pestaña 3: Impresión Personalizada */}
+                    {patientSubTab === "imprimir" && (
+                      <div style={{ marginTop: "1rem" }} className="fade-in">
+                        
+                        <div className="card" style={{ marginBottom: "2rem" }}>
+                          <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>Configurar Documento de Impresión</h3>
+                          <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
+                            Selecciona las consultas específicas que deseas imprimir. Puedes utilizar el filtro por fecha para marcar las consultas de un período determinado de forma automática.
+                          </p>
+
+                          {/* Filtros de Fecha */}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label">Desde la Fecha</label>
+                              <input 
+                                type="date" 
+                                className="form-input" 
+                                value={printStartDate}
+                                onChange={(e) => setPrintStartDate(e.target.value)}
+                              />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label">Hasta la Fecha</label>
+                              <input 
+                                type="date" 
+                                className="form-input" 
+                                value={printEndDate}
+                                onChange={(e) => setPrintEndDate(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Acciones Rápidas */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>
+                            <div style={{ display: "flex", gap: "1rem" }}>
+                              <button className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} onClick={selectAllConsultations}>
+                                ☑️ Seleccionar Todas
+                              </button>
+                              <button className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} onClick={deselectAllConsultations}>
+                                ⬛ Desmarcar Todas
+                              </button>
+                            </div>
+                            <span style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--primary)" }}>
+                              Seleccionadas: {selectedPrintConsultations.size} de {selectedPaciente.consultas?.length || 0}
+                            </span>
+                          </div>
+
+                          {/* Botón de Impresión Principal */}
+                          <button 
+                            className="btn btn-primary" 
+                            style={{ width: "100%", padding: "0.85rem", fontSize: "1.05rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                            onClick={handleTriggerPrint}
+                          >
+                            🖨️ Generar y Abrir Panel de Impresión ({selectedPrintConsultations.size})
+                          </button>
+                        </div>
+
+                        {/* Listado de Consultas con Checkbox */}
+                        <div>
+                          <h3 style={{ marginBottom: "1.25rem" }}>Seleccionar Consultas del Historial</h3>
+                          {(!selectedPaciente.consultas || selectedPaciente.consultas.length === 0) ? (
+                            <p style={{ color: "var(--text-muted)" }}>No hay consultas clínicas registradas para este paciente.</p>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                              {selectedPaciente.consultas.map((consulta) => {
+                                const isChecked = selectedPrintConsultations.has(consulta.id);
+                                return (
+                                  <div 
+                                    key={consulta.id} 
+                                    className="card" 
+                                    style={{ 
+                                      display: "flex", 
+                                      gap: "1.25rem", 
+                                      alignItems: "flex-start", 
+                                      cursor: "pointer", 
+                                      border: isChecked ? "1.5px solid var(--primary)" : "1px solid var(--border-color)",
+                                      backgroundColor: isChecked ? "var(--primary-light)" : ""
+                                    }}
+                                    onClick={() => togglePrintConsultation(consulta.id)}
+                                  >
+                                    <input 
+                                      type="checkbox" 
+                                      checked={isChecked}
+                                      onChange={() => {}} // Manejado por el click de la card
+                                      style={{ width: "18px", height: "18px", marginTop: "0.2rem", cursor: "pointer" }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+                                        <strong style={{ color: "var(--primary)", fontSize: "1rem" }}>{consulta.motivo}</strong>
+                                        <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                                          {new Date(consulta.fecha).toLocaleDateString()}
+                                        </span>
+                                      </div>
+                                      <p style={{ fontSize: "0.9rem", color: "var(--text-main)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                                        <strong>Evaluación:</strong> {consulta.diagnostico}
+                                      </p>
                                     </div>
                                   </div>
                                 );
@@ -737,6 +945,81 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* --- Contenedor HTML Temporal de Impresión (Invisible en Pantalla, visible en Impresora) --- */}
+      {printData && (
+        <div className="print-only">
+          <div className="print-header">
+            <div>
+              <h1 className="print-title">Registro de Historia Clínica</h1>
+              <p style={{ margin: 0, fontSize: "10pt" }}>Be-Pacient - Sistema Médico Local</p>
+            </div>
+            <div className="print-meta">
+              <p style={{ margin: 0 }}><strong>Fecha Emisión:</strong> {new Date().toLocaleDateString()}</p>
+            </div>
+          </div>
+
+          <div className="print-patient-card">
+            <h3 className="print-section-title" style={{ marginTop: 0, border: "none" }}>Ficha Personal del Paciente</h3>
+            <div className="print-patient-grid">
+              <div><strong>Nombre Completo:</strong> {printData.paciente.apellido}, {printData.paciente.nombre}</div>
+              <div><strong>Documento (DNI):</strong> {printData.paciente.dni}</div>
+              <div><strong>Fecha Nacimiento:</strong> {printData.paciente.fecha_nacimiento}</div>
+              <div><strong>Teléfono:</strong> {printData.paciente.telefono || "No registrado"}</div>
+              <div><strong>Email:</strong> {printData.paciente.email || "No registrado"}</div>
+              <div><strong>Dirección:</strong> {printData.paciente.direccion || "No registrado"}</div>
+            </div>
+            {printData.paciente.notas_generales && (
+              <div style={{ marginTop: "1rem", paddingTop: "0.5rem", borderTop: "1px dashed #000000", fontSize: "10pt" }}>
+                <strong>Antecedentes y Alergias Relevantes:</strong>
+                <p style={{ margin: "0.25rem 0 0 0", color: "#333", whiteSpace: "pre-line" }}>{printData.paciente.notas_generales}</p>
+              </div>
+            )}
+          </div>
+
+          <h3 className="print-section-title">Historial Clínico de Consultas Seleccionadas</h3>
+          {printData.consultas.length === 0 ? (
+            <p>No se seleccionaron consultas para imprimir.</p>
+          ) : (
+            <div>
+              {printData.consultas.map((c, index) => (
+                <div key={c.id} className="print-consultation-item">
+                  <div className="print-consultation-header">
+                    <strong>Consulta #{index + 1}: {c.motivo}</strong>
+                    <span>{new Date(c.fecha).toLocaleDateString()} {new Date(c.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div className="print-consultation-body">
+                    <div style={{ marginTop: "0.5rem" }}><strong>Evaluación Médica / Diagnóstico:</strong></div>
+                    <div style={{ whiteSpace: "pre-line", marginBottom: "0.5rem", paddingLeft: "0.5rem" }}>{c.diagnostico}</div>
+                    
+                    <div><strong>Tratamiento / Indicaciones Recetadas:</strong></div>
+                    <div style={{ whiteSpace: "pre-line", marginBottom: "0.5rem", paddingLeft: "0.5rem" }}>{c.tratamiento}</div>
+                    
+                    {c.notes && ( // Soporte retrocompatible
+                      <>
+                        <div><strong>Notas Adicionales:</strong></div>
+                        <div style={{ whiteSpace: "pre-line", paddingLeft: "0.5rem" }}>{c.notes}</div>
+                      </>
+                    )}
+                    {c.notas && (
+                      <>
+                        <div><strong>Notas Adicionales:</strong></div>
+                        <div style={{ whiteSpace: "pre-line", paddingLeft: "0.5rem" }}>{c.notas}</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="print-footer-signature">
+            <div className="signature-box">
+              Firma y Sello del Profesional
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
