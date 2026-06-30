@@ -42,7 +42,6 @@ if %errorlevel% neq 0 (
 call pyinstaller --onefile --noconsole --name="Be-Pacient" --add-data "static;static" app/main.py
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo la compilacion con PyInstaller.
-    pause
     exit /b 1
 )
 
@@ -53,4 +52,3 @@ echo   El ejecutable se encuentra en:
 echo   backend\dist\Be-Pacient.exe
 echo ===================================================
 echo.
-pause
