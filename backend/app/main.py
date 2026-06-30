@@ -1,21 +1,29 @@
 from contextlib import asynccontextmanager
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session
 import os
 import uuid
 import shutil
+import zipfile
 from datetime import datetime
 
-from .database import create_db_and_tables, get_session
+from .database import create_db_and_tables, get_session, engine, DATABASE_FILENAME
 from .schemas import (
     PacienteCreate,
     PacienteRead,
     PacienteReadConConsultas,
     ConsultaCreate,
     ConsultaRead,
-    DocumentoRead
+    DocumentoRead,
+    ConfiguracionRead,
+    ConfiguracionUpdate,
+    RecetaCreate,
+    RecetaRead,
+    CitaCreate,
+    CitaRead,
+    CitaReadConPaciente
 )
 from . import crud
 from . import scanner
@@ -273,6 +281,238 @@ def delete_documento(documento_id: int, db: Session = Depends(get_session)):
         except Exception as e:
             # Continuamos con el borrado de la DB aun si falla en disco
             pass
+
+    # 2. Eliminar registro de la base de datos
+    crud.delete_documento(db, documento_id=documento_id)
+    return {"message": "Documento eliminado con éxito"}
+
+# --- Endpoints de Configuración Médica ---
+
+@app.get("/api/configuracion", response_model=ConfiguracionRead)
+def read_configuracion(db: Session = Depends(get_session)):
+    """Obtiene los datos de configuración del médico (nombre, especialidad, matrícula)."""
+    return crud.get_configuracion(db)
+
+@app.post("/api/configuracion", response_model=ConfiguracionRead)
+def update_configuracion(config_in: ConfiguracionUpdate, db: Session = Depends(get_session)):
+    """Actualiza los datos de configuración del médico."""
+    return crud.update_configuracion(db, config_in)
+
+@app.post("/api/configuracion/firma", response_model=ConfiguracionRead)
+def subir_firma_doctor(file: UploadFile = File(...), db: Session = Depends(get_session)):
+    """Sube la firma o sello digitalizado del médico."""
+    file_extension = os.path.splitext(file.filename)[1] if file.filename else ""
+    filename = f"doctor_signature{file_extension}"
+    file_path = os.path.join(uploads_dir, filename)
+    
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"No se pudo guardar la firma: {str(e)}"
+        )
+        
+    relative_path = f"/uploads/{filename}"
+    return crud.update_firma_ruta(db, relative_path)
+
+# --- Endpoints de Recetas Médicas ---
+
+@app.post("/api/recetas", response_model=RecetaRead, status_code=status.HTTP_201_CREATED)
+def crear_receta(receta_in: RecetaCreate, db: Session = Depends(get_session)):
+    """Crea una nueva receta médica asociada a un paciente."""
+    db_paciente = crud.get_paciente(db, paciente_id=receta_in.paciente_id)
+    if not db_paciente:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Paciente con ID {receta_in.paciente_id} no existe"
+        )
+    return crud.create_receta(db, receta_in)
+
+@app.get("/api/pacientes/{paciente_id}/recetas", response_model=List[RecetaRead])
+def listar_recetas_paciente(paciente_id: int, db: Session = Depends(get_session)):
+    """Lista las recetas médicas emitidas para el paciente."""
+    db_paciente = crud.get_paciente(db, paciente_id=paciente_id)
+    if not db_paciente:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Paciente con ID {paciente_id} no existe"
+        )
+    return crud.get_recetas_por_paciente(db, paciente_id=paciente_id)
+
+@app.delete("/api/recetas/{receta_id}")
+def delete_receta(receta_id: int, db: Session = Depends(get_session)):
+    """Elimina una receta médica del historial."""
+    success = crud.delete_receta(db, receta_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Receta con ID {receta_id} no encontrada"
+        )
+    return {"message": "Receta eliminada con éxito"}
+
+# --- Endpoints de Agenda y Citas ---
+
+@app.post("/api/citas", response_model=CitaRead, status_code=status.HTTP_201_CREATED)
+def crear_cita(cita_in: CitaCreate, db: Session = Depends(get_session)):
+    """Registra un nuevo turno/cita en la agenda."""
+    db_paciente = crud.get_paciente(db, paciente_id=cita_in.paciente_id)
+    if not db_paciente:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Paciente con ID {cita_in.paciente_id} no existe"
+        )
+    return crud.create_cita(db, cita_in)
+
+@app.get("/api/citas", response_model=List[CitaReadConPaciente])
+def listar_citas(db: Session = Depends(get_session)):
+    """Obtiene el listado de todos los turnos registrados en la agenda."""
+    return crud.get_citas(db)
+
+@app.put("/api/citas/{cita_id}", response_model=CitaRead)
+def actualizar_cita_estado(cita_id: int, estado: str, db: Session = Depends(get_session)):
+    """Cambia el estado de una cita (ej. completada, cancelada)."""
+    cita = crud.update_cita_estado(db, cita_id, estado)
+    if not cita:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cita con ID {cita_id} no encontrada"
+        )
+    return cita
+
+@app.delete("/api/citas/{cita_id}")
+def eliminar_cita(cita_id: int, db: Session = Depends(get_session)):
+    """Elimina de forma permanente una cita de la agenda."""
+    success = crud.delete_cita(db, cita_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cita con ID {cita_id} no encontrada"
+        )
+    return {"message": "Cita eliminada con éxito"}
+
+# --- Endpoints de Copia de Seguridad (Backup & Restore) ---
+
+def remove_file(path: str):
+    try:
+        os.remove(path)
+    except Exception:
+        pass
+
+@app.get("/api/backup")
+def crear_backup(background_tasks: BackgroundTasks):
+    """Crea una copia de seguridad empaquetada en ZIP (base de datos + archivos adjuntos)."""
+    db_path = str(engine.url).replace("sqlite:///", "")
+    
+    zip_filename = f"backup_bepacient_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    zip_path = os.path.join(uploads_dir, zip_filename)
+    
+    try:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # 1. Agregar base de datos SQLite
+            if os.path.exists(db_path):
+                zip_file.write(db_path, arcname=DATABASE_FILENAME)
+            
+            # 2. Agregar carpeta uploads
+            for root, _, files in os.walk(uploads_dir):
+                for file in files:
+                    if file == zip_filename or file.startswith("temp_restore_"):
+                        continue
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.join("uploads", file)
+                    zip_file.write(file_path, arcname=arcname)
+                    
+        background_tasks.add_task(remove_file, zip_path)
+        
+        return FileResponse(
+            path=zip_path,
+            filename=zip_filename,
+            media_type="application/zip"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"No se pudo crear la copia de seguridad: {str(e)}"
+        )
+
+@app.post("/api/restore")
+def restaurar_backup(file: UploadFile = File(...), db: Session = Depends(get_session)):
+    """Restaura una copia de seguridad a partir de un archivo ZIP."""
+    if not file.filename or not file.filename.endswith(".zip"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El archivo proporcionado debe ser un .zip válido"
+        )
+        
+    temp_zip_path = os.path.join(uploads_dir, f"temp_restore_{uuid.uuid4()}.zip")
+    
+    # 1. Guardar el zip subido
+    try:
+        with open(temp_zip_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al guardar archivo temporal: {str(e)}"
+        )
+        
+    # 2. Descomprimir e importar
+    db_path = str(engine.url).replace("sqlite:///", "")
+    
+    try:
+        # Cerrar conexiones activas en el pool de SQLAlchemy para liberar el archivo SQLite
+        engine.dispose()
+        
+        # Copia de seguridad temporal preventiva
+        backup_db_path = db_path + ".bak"
+        if os.path.exists(db_path):
+            shutil.copy2(db_path, backup_db_path)
+            
+        with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+            namelist = zip_ref.namelist()
+            if DATABASE_FILENAME not in namelist:
+                if os.path.exists(backup_db_path):
+                    shutil.copy2(backup_db_path, db_path)
+                    os.remove(backup_db_path)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El archivo zip no contiene una base de datos {DATABASE_FILENAME} válida"
+                )
+                
+            # Extraer base de datos
+            zip_ref.extract(DATABASE_FILENAME, path=os.path.dirname(db_path))
+            
+            # Extraer archivos de uploads
+            for item in namelist:
+                if item.startswith("uploads/") and not item.endswith("/"):
+                    filename = os.path.basename(item)
+                    dest_file_path = os.path.join(uploads_dir, filename)
+                    with zip_ref.open(item) as source_file:
+                        with open(dest_file_path, "wb") as dest_file:
+                            shutil.copyfileobj(source_file, dest_file)
+                            
+        if os.path.exists(backup_db_path):
+            os.remove(backup_db_path)
+        os.remove(temp_zip_path)
+        
+        # Re-crear tablas (si el backup es de una versión anterior que no tiene todas las tablas)
+        create_db_and_tables()
+        
+        return {"message": "Copia de seguridad restaurada con éxito"}
+        
+    except Exception as e:
+        # Revertir db en caso de fallo
+        backup_db_path = db_path + ".bak"
+        if os.path.exists(backup_db_path):
+            shutil.copy2(backup_db_path, db_path)
+            os.remove(backup_db_path)
+        if os.path.exists(temp_zip_path):
+            os.remove(temp_zip_path)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Fallo durante la restauración: {str(e)}"
+        )
 
     # 2. Eliminar registro de la base de datos
     crud.delete_documento(db, documento_id=documento_id)
