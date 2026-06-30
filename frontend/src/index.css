@@ -250,6 +250,14 @@ body {
   animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+/* En pantalla, los contenedores de impresión están totalmente ocultos */
+@media screen {
+  .print-history-only,
+  .print-recipe-only {
+    display: none !important;
+  }
+}
+
 /* --- Estilos de Impresión (@media print) --- */
 @media print {
   body {
@@ -261,7 +269,7 @@ body {
     padding: 0 !important;
   }
   
-  /* Ocultar toda la interfaz interactiva de pantalla */
+  /* Ocultar interfaz gráfica en impresión */
   .app-container, 
   .sidebar, 
   .main-panel, 
@@ -277,8 +285,21 @@ body {
     display: none !important;
   }
   
-  /* Mostrar únicamente el contenedor print-only */
-  .print-only {
+  /* Control de visibilidad condicional de impresión */
+  .print-history-only,
+  .print-recipe-only {
+    display: none !important;
+  }
+
+  body.printing-history .print-history-only {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 1.5cm !important;
+    box-sizing: border-box !important;
+  }
+
+  body.printing-recipe .print-recipe-only {
     display: block !important;
     width: 100% !important;
     margin: 0 !important;
@@ -286,6 +307,62 @@ body {
     box-sizing: border-box !important;
   }
   
+  /* Formato Membrete de Receta */
+  .recipe-print-header {
+    border-bottom: 2px solid #000000;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+  
+  .recipe-doctor-name {
+    font-size: 16pt;
+    font-weight: 700;
+    margin: 0;
+  }
+  
+  .recipe-doctor-spec {
+    font-size: 10pt;
+    color: #444444;
+    margin: 0.2rem 0;
+  }
+  
+  .recipe-patient-info {
+    background-color: #f9f9f9;
+    border: 1px solid #000000;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    font-size: 10pt;
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 0.5rem;
+  }
+  
+  .recipe-body {
+    min-height: 8cm;
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+  
+  .recipe-section-title {
+    font-size: 12pt;
+    font-weight: 700;
+    border-bottom: 1px solid #000000;
+    margin: 1rem 0 0.5rem 0;
+    padding-bottom: 0.2rem;
+  }
+  
+  .recipe-print-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 1.5cm;
+    border-top: 1px dashed #777777;
+    padding-top: 1rem;
+    font-size: 9pt;
+  }
+  
+  /* Membrete e Historial de Historia Clínica */
   .print-header {
     border-bottom: 2px solid #000000;
     padding-bottom: 1rem;
@@ -295,48 +372,10 @@ body {
     align-items: flex-end;
   }
   
-  .print-title {
-    font-size: 18pt;
-    font-weight: 700;
-    color: #000000;
-    text-transform: uppercase;
-  }
-  
-  .print-meta {
-    font-size: 9pt;
-    color: #555555;
-    text-align: right;
-  }
-  
-  .print-patient-card {
-    border: 1px solid #000000;
-    border-radius: 6px;
-    padding: 1rem;
-    margin-bottom: 2rem;
-    background: none !important;
-  }
-  
-  .print-patient-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem 1.5rem;
-    margin-top: 0.5rem;
-    font-size: 10pt;
-  }
-  
-  .print-section-title {
-    font-size: 12pt;
-    font-weight: 700;
-    margin-bottom: 0.75rem;
-    border-bottom: 1px solid #000000;
-    padding-bottom: 0.25rem;
-    page-break-after: avoid;
-  }
-  
   .print-consultation-item {
     border-bottom: 1px dashed #777777;
     padding: 1rem 0;
-    page-break-inside: avoid; /* Evita cortar una consulta a la mitad */
+    page-break-inside: avoid;
   }
   
   .print-consultation-header {
@@ -355,7 +394,7 @@ body {
   }
   
   .print-footer-signature {
-    margin-top: 3cm;
+    margin-top: 2.5cm;
     display: flex;
     justify-content: flex-end;
     page-break-inside: avoid;
@@ -370,9 +409,71 @@ body {
   }
 }
 
-/* En pantalla, el contenedor de impresión está totalmente oculto */
-@media screen {
-  .print-only {
-    display: none !important;
-  }
+/* --- Estilos UI para Agenda y Turnos en Pantalla --- */
+.agenda-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 2rem;
+}
+
+.cita-card {
+  border-left: 5px solid var(--primary);
+  margin-bottom: 1rem;
+  transition: var(--transition-smooth);
+}
+
+.cita-card:hover {
+  transform: translateY(-2px);
+}
+
+.cita-card.completada {
+  border-left-color: rgb(16, 185, 129);
+  opacity: 0.8;
+}
+
+.cita-card.cancelada {
+  border-left-color: rgb(239, 68, 68);
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.status-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.status-badge.programado {
+  background-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.status-badge.completada {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: rgb(16, 185, 129);
+}
+
+.status-badge.cancelada {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: rgb(239, 68, 68);
+}
+
+/* Ajustes de firma en Configuración */
+.signature-preview-container {
+  margin-top: 1rem;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: rgba(0,0,0,0.02);
+}
+
+.signature-preview {
+  max-width: 200px;
+  max-height: 100px;
+  object-fit: contain;
+  mix-blend-mode: multiply; /* Fusiona firmas con fondo blanco */
 }
