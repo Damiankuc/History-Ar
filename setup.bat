@@ -1,7 +1,7 @@
 @echo off
-title Configurando entorno Be-Pacient
+title Configurando entorno History-Ar
 echo ===================================================
-echo   Configurando entorno de desarrollo - Be-Pacient
+echo   Configurando entorno de desarrollo - History-Ar
 echo ===================================================
 echo.
 

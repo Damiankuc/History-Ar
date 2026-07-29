@@ -708,7 +708,7 @@ function App() {
       <aside className="sidebar">
         <div className="logo-container">
           <div className="logo-icon">P</div>
-          <span className="logo-text">Be-Pacient</span>
+          <span className="logo-text">History-Ar</span>
         </div>
         
         <nav>
@@ -1633,7 +1633,7 @@ function App() {
           <div className="print-header">
             <div>
               <h1 className="print-title">Registro de Historia Clínica</h1>
-              <p style={{ margin: 0, fontSize: "10pt" }}>Be-Pacient - Sistema Médico Local</p>
+              <p style={{ margin: 0, fontSize: "10pt" }}>History-Ar - Sistema Médico Local</p>
             </div>
             <div className="print-meta">
               <p style={{ margin: 0 }}><strong>Fecha Emisión:</strong> {new Date().toLocaleDateString()}</p>
@@ -1727,7 +1727,7 @@ function App() {
               {configuracion.doctor_matricula && ` | ${configuracion.doctor_matricula}`}
             </p>
             <p style={{ margin: "0.2rem 0 0 0", fontSize: "9pt", color: "#555" }}>
-              Be-Pacient - Recetario Médico Local
+              History-Ar - Recetario Médico Local
             </p>
           </div>
 

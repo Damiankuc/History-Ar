@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="Be-Pacient API",
+    title="History-Ar API",
     description="Backend local para la gestión de Historias Médicas",
     version="1.0.0",
     lifespan=lifespan
@@ -94,7 +94,7 @@ app.add_middleware(
 @app.get("/api/health", status_code=status.HTTP_200_OK)
 def health_check():
     """Endpoint simple para verificar que la API está levantada y funcionando."""
-    return {"status": "ok", "app": "Be-Pacient Backend"}
+    return {"status": "ok", "app": "History-Ar Backend"}
 
 @app.post("/api/heartbeat")
 def post_heartbeat():
@@ -186,7 +186,7 @@ def read_consulta(consulta_id: int, db: Session = Depends(get_session)):
 # Configuración del directorio de subidas local (uploads)
 appdata_path = os.environ.get("APPDATA")
 if appdata_path:
-    uploads_dir = os.path.join(appdata_path, "Be-Pacient", "uploads")
+    uploads_dir = os.path.join(appdata_path, "History-Ar", "uploads")
 else:
     uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
 

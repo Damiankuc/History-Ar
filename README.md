@@ -1,4 +1,4 @@
-# Be-Pacient - Sistema Local de Gestión de Historias Clínicas
+# History-Ar - Sistema Local de Gestión de Historias Clínicas
 
 Suite médica de escritorio local diseñada para consultorios. Permite registrar fichas de pacientes, llevar el historial clínico, digitalizar/escanear documentos físicos, programar turnos, emitir recetas médicas pre-selladas con firma digital y realizar copias de seguridad locales en formato `.zip`.
 
@@ -46,7 +46,7 @@ Para compilar todo el frontend React en archivos estáticos, guardarlos dentro d
 ```powershell
 .\build.bat
 ```
-El archivo ejecutable resultante se ubicará en **`backend/dist/Be-Pacient.exe`** (ocupa ~20 MB y puede correr en otra PC sin necesidad de tener Node.js ni Python instalados).
+El archivo ejecutable resultante se ubicará en **`backend/dist/History-Ar.exe`** (ocupa ~20 MB y puede correr en otra PC sin necesidad de tener Node.js ni Python instalados).
 
 ---
 
@@ -54,4 +54,4 @@ El archivo ejecutable resultante se ubicará en **`backend/dist/Be-Pacient.exe`*
 
 * **En desarrollo:** La base de datos local se crea en la carpeta del backend como `pacientes.db`.
 * **En producción (Ejecutable compilado):** Para evitar que el médico pierda información al reemplazar el ejecutable, la base de datos y los archivos adjuntos se guardan en la ruta de sistema aislada del usuario:
-  `%APPDATA%/Be-Pacient/pacientes.db`
+  `%APPDATA%/History-Ar/pacientes.db`

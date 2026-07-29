@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Be-Pacient Frontend', () => {
+test.describe('History-Ar Frontend', () => {
   test.beforeEach(async ({ page }) => {
     // Ir a la URL raíz (http://localhost:1420 definido en playwright.config.ts)
     await page.goto('/');
@@ -9,7 +9,7 @@ test.describe('Be-Pacient Frontend', () => {
   test('debe cargar la aplicación con el sidebar y el listado de pacientes', async ({ page }) => {
     // Verificar que el nombre del software está en el sidebar
     const logoText = page.locator('.logo-text');
-    await expect(logoText).toHaveText('Be-Pacient');
+    await expect(logoText).toHaveText('History-Ar');
 
     // Verificar que el directorio se muestra correctamente
     const headerTitle = page.locator('h2');

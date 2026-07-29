@@ -8,7 +8,7 @@ DATABASE_FILENAME = "pacientes.db"
 # En desarrollo, lo guardamos localmente en el directorio de trabajo.
 appdata_path = os.environ.get("APPDATA")
 if appdata_path:
-    db_dir = os.path.join(appdata_path, "Be-Pacient")
+    db_dir = os.path.join(appdata_path, "History-Ar")
     os.makedirs(db_dir, exist_ok=True)
     DATABASE_URL = f"sqlite:///{os.path.join(db_dir, DATABASE_FILENAME)}"
 else:
