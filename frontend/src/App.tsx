@@ -707,7 +707,7 @@ function App() {
       {/* Sidebar de Navegación */}
       <aside className="sidebar">
         <div className="logo-container">
-          <div className="logo-icon">P</div>
+          <div className="logo-icon">H</div>
           <span className="logo-text">History-Ar</span>
         </div>
         
