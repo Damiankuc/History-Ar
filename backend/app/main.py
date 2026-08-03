@@ -40,30 +40,25 @@ from schemas import (
 import crud
 import scanner
 
-def launch_browser_and_monitor():
-    """Abre la aplicación en Edge (Modo App) y monitorea la ventana del programa: solo apaga el servidor cuando el usuario cierra la ventana (X)."""
+def launch_browser():
+    """Abre la aplicación en Edge (Modo App) de forma limpia."""
     time.sleep(1.5)
     try:
-        profile_dir = os.path.join(os.environ.get("LOCALAPPDATA", "."), "History-Ar", "EdgeProfile")
-        os.makedirs(profile_dir, exist_ok=True)
-        
-        proc = subprocess.Popen([
-            "msedge.exe", 
-            "--app=http://localhost:8000", 
-            f"--user-data-dir={profile_dir}",
-            "--no-first-run",
-            "--no-default-browser-check"
-        ])
-        proc.wait()
-        print("Ventana principal de History-Ar cerrada por el usuario. Finalizando backend...")
-        os._exit(0)
+        subprocess.run(["cmd", "/c", "start msedge.exe --app=http://localhost:8000"], shell=True)
     except Exception:
-        try:
-            proc = subprocess.Popen(["cmd", "/c", "start /wait msedge.exe --app=http://localhost:8000"], shell=True)
-            proc.wait()
+        pass
+
+# Monitoreo de inactividad prolongada (15 minutos de inactividad total)
+last_heartbeat = time.time()
+
+def monitor_heartbeat():
+    time.sleep(60.0)
+    while True:
+        time.sleep(10.0)
+        # Solo apagar si transcurren más de 15 minutos (900 segundos) de inactividad
+        if time.time() - last_heartbeat > 900.0:
+            print("Inactividad prolongada (15 min). Apagando servidor backend...")
             os._exit(0)
-        except Exception:
-            pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -73,9 +68,10 @@ async def lifespan(app: FastAPI):
     # Migración: agregar columnas nuevas a DBs existentes de versiones anteriores
     _migrate_db()
     
-    # Si la aplicación está compilada (PyInstaller), abrir la ventana de la app y monitorear su cierre
+    # Si la aplicación está compilada (PyInstaller), abrir la ventana de la app
     if getattr(sys, 'frozen', False):
-        threading.Thread(target=launch_browser_and_monitor, daemon=True).start()
+        threading.Thread(target=launch_browser, daemon=True).start()
+        threading.Thread(target=monitor_heartbeat, daemon=True).start()
         
     yield
 
