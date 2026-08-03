@@ -40,27 +40,30 @@ from schemas import (
 import crud
 import scanner
 
-def launch_browser():
-    # Esperar 2.0 segundos a que el servidor FastAPI levante
-    time.sleep(2.0)
+def launch_browser_and_monitor():
+    """Abre la aplicación en Edge (Modo App) y monitorea la ventana del programa: solo apaga el servidor cuando el usuario cierra la ventana (X)."""
+    time.sleep(1.5)
     try:
-        # Lanzar Edge en Modo App apuntando al host local
-        subprocess.run(["cmd", "/c", "start msedge.exe --app=http://localhost:8000"], shell=True)
+        profile_dir = os.path.join(os.environ.get("LOCALAPPDATA", "."), "History-Ar", "EdgeProfile")
+        os.makedirs(profile_dir, exist_ok=True)
+        
+        proc = subprocess.Popen([
+            "msedge.exe", 
+            "--app=http://localhost:8000", 
+            f"--user-data-dir={profile_dir}",
+            "--no-first-run",
+            "--no-default-browser-check"
+        ])
+        proc.wait()
+        print("Ventana principal de History-Ar cerrada por el usuario. Finalizando backend...")
+        os._exit(0)
     except Exception:
-        pass
-
-# Monitoreo de actividad (Heartbeat) para evitar que quede corriendo en segundo plano
-last_heartbeat = time.time()
-
-def monitor_heartbeat():
-    # Dar 60 segundos al inicio para permitir que se abra la ventana y mande latidos
-    time.sleep(60.0)
-    while True:
-        time.sleep(5.0)
-        # Si han pasado más de 45 segundos sin recibir un latido, asumimos que el navegador se cerró
-        if time.time() - last_heartbeat > 45.0:
-            print("No heartbeat received from frontend. Shutting down FastAPI backend...")
+        try:
+            proc = subprocess.Popen(["cmd", "/c", "start /wait msedge.exe --app=http://localhost:8000"], shell=True)
+            proc.wait()
             os._exit(0)
+        except Exception:
+            pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,13 +71,11 @@ async def lifespan(app: FastAPI):
     create_db_and_tables()
 
     # Migración: agregar columnas nuevas a DBs existentes de versiones anteriores
-    # SQLite no soporta IF NOT EXISTS en ALTER TABLE, pero podemos usar try/except
     _migrate_db()
     
-    # Si la aplicación está compilada (PyInstaller), abrir el navegador en Modo App y monitorear actividad
+    # Si la aplicación está compilada (PyInstaller), abrir la ventana de la app y monitorear su cierre
     if getattr(sys, 'frozen', False):
-        threading.Thread(target=launch_browser, daemon=True).start()
-        threading.Thread(target=monitor_heartbeat, daemon=True).start()
+        threading.Thread(target=launch_browser_and_monitor, daemon=True).start()
         
     yield
 
@@ -465,29 +466,42 @@ def extraer_texto_pdf(file: UploadFile = File(...)):
             detail=f"Error al procesar el PDF: {str(e)}"
         )
 
-def _remover_fondo_blanco(input_bytes: bytes, threshold: int = 215) -> bytes:
-    """Procesa la imagen recibida: convierte el fondo blanco/claro en transparente (PNG)."""
+def _remover_fondo_blanco(input_bytes: bytes, bg_threshold: int = 175, ink_threshold: int = 120) -> bytes:
+    """Procesa la imagen recibida: remueve el papel (blanco, gris claro, crema de escáner) dejando solo la firma/tinta transparente."""
     try:
-        from PIL import Image
+        from PIL import Image, ImageEnhance
         import io
         img = Image.open(io.BytesIO(input_bytes)).convert("RGBA")
-        datas = img.getdata()
         
+        # Aumentar contraste ligeramente para separar la tinta del papel escaneado
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(1.3)
+        
+        datas = img.getdata()
         newData = []
+        
         for item in datas:
             r, g, b, a = item
-            # Si el píxel es blanco o muy claro (R, G, B > threshold)
-            if r > threshold and g > threshold and b > threshold:
-                newData.append((255, 255, 255, 0))  # Transparente
+            # Luminancia (brillo percibido del píxel)
+            lum = int(0.299 * r + 0.587 * g + 0.114 * b)
+            
+            if lum >= bg_threshold:
+                # Fondo de papel (blanco o gris claro): transparente
+                newData.append((255, 255, 255, 0))
+            elif lum <= ink_threshold:
+                # Tinta/Sello: conservar opaco
+                newData.append((r, g, b, 255))
             else:
-                newData.append((r, g, b, a))
+                # Bordes del trazo: transparencia gradual para suavizado (anti-aliasing)
+                alpha = int((bg_threshold - lum) / (bg_threshold - ink_threshold) * 255)
+                newData.append((r, g, b, max(0, min(255, alpha))))
                 
         img.putdata(newData)
         output = io.BytesIO()
         img.save(output, format="PNG")
         return output.getvalue()
     except Exception:
-        # Si ocurre un error inesperado en la conversión, retornar los bytes originales
+        # En caso de error inesperado, retornar los bytes originales
         return input_bytes
 
 @app.post("/api/configuracion/firma", response_model=ConfiguracionRead)

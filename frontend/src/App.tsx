@@ -152,6 +152,9 @@ function App() {
   const [importingPdf, setImportingPdf] = useState(false);
   const [pdfPreview, setPdfPreview] = useState<{texto: string; paginas: number} | null>(null);
 
+  // --- Estado de Firma (Caché invalidation) ---
+  const [signatureKey, setSignatureKey] = useState(Date.now());
+
   // Estados de formularios originales
   const [newPaciente, setNewPaciente] = useState({
     nombre: "",
@@ -463,6 +466,7 @@ function App() {
       });
       if (res.ok) {
         alert("Firma/Sello cargado con éxito");
+        setSignatureKey(Date.now());
         loadConfiguracion();
       } else {
         alert("Error al subir la firma");
@@ -2030,7 +2034,7 @@ function App() {
                         Firma Activa Previsualizada:
                       </span>
                       <img 
-                        src={`${FILE_BASE_URL}${configuracion.firma_ruta}`} 
+                        src={`${FILE_BASE_URL}${configuracion.firma_ruta}?t=${signatureKey}`} 
                         alt="Firma del doctor" 
                         className="signature-preview" 
                       />
@@ -2269,7 +2273,7 @@ function App() {
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "220px" }}>
               {configuracion.firma_ruta ? (
                 <img 
-                  src={`${FILE_BASE_URL}${configuracion.firma_ruta}`} 
+                  src={`${FILE_BASE_URL}${configuracion.firma_ruta}?t=${signatureKey}`} 
                   alt="Sello/Firma del doctor" 
                   style={{ maxHeight: "80px", maxWidth: "160px", mixBlendMode: "multiply", marginBottom: "0.2rem" }} 
                 />
@@ -2339,7 +2343,7 @@ function App() {
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "220px" }}>
               {configuracion.firma_ruta ? (
                 <img 
-                  src={`${FILE_BASE_URL}${configuracion.firma_ruta}`} 
+                  src={`${FILE_BASE_URL}${configuracion.firma_ruta}?t=${signatureKey}`} 
                   alt="Sello/Firma del doctor" 
                   style={{ maxHeight: "80px", maxWidth: "160px", mixBlendMode: "multiply", marginBottom: "0.2rem" }} 
                 />
