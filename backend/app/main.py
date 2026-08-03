@@ -465,16 +465,42 @@ def extraer_texto_pdf(file: UploadFile = File(...)):
             detail=f"Error al procesar el PDF: {str(e)}"
         )
 
+def _remover_fondo_blanco(input_bytes: bytes, threshold: int = 215) -> bytes:
+    """Procesa la imagen recibida: convierte el fondo blanco/claro en transparente (PNG)."""
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(input_bytes)).convert("RGBA")
+        datas = img.getdata()
+        
+        newData = []
+        for item in datas:
+            r, g, b, a = item
+            # Si el píxel es blanco o muy claro (R, G, B > threshold)
+            if r > threshold and g > threshold and b > threshold:
+                newData.append((255, 255, 255, 0))  # Transparente
+            else:
+                newData.append((r, g, b, a))
+                
+        img.putdata(newData)
+        output = io.BytesIO()
+        img.save(output, format="PNG")
+        return output.getvalue()
+    except Exception:
+        # Si ocurre un error inesperado en la conversión, retornar los bytes originales
+        return input_bytes
+
 @app.post("/api/configuracion/firma", response_model=ConfiguracionRead)
 def subir_firma_doctor(file: UploadFile = File(...), db: Session = Depends(get_session)):
-    """Sube la firma o sello digitalizado del médico."""
-    file_extension = os.path.splitext(file.filename)[1] if file.filename else ""
-    filename = f"doctor_signature{file_extension}"
+    """Sube la firma o sello digitalizado del médico, eliminando automáticamente el fondo blanco."""
+    filename = "doctor_signature.png"
     file_path = os.path.join(uploads_dir, filename)
     
     try:
+        content = file.file.read()
+        processed_content = _remover_fondo_blanco(content)
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(processed_content)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
