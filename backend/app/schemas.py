@@ -41,11 +41,26 @@ class ConfiguracionRead(SQLModel):
     doctor_especialidad: str
     doctor_matricula: str
     firma_ruta: Optional[str]
+    pedir_password_al_iniciar: bool
 
 class ConfiguracionUpdate(SQLModel):
     doctor_nombre: Optional[str] = None
     doctor_especialidad: Optional[str] = None
     doctor_matricula: Optional[str] = None
+    pedir_password_al_iniciar: Optional[bool] = None
+
+# --- Schemas de Autenticación ---
+
+class LoginRequest(SQLModel):
+    password: str
+
+class CambiarPasswordRequest(SQLModel):
+    password_actual: str
+    password_nueva: str
+
+class AuthEstadoRead(SQLModel):
+    pedir_password_al_iniciar: bool
+    tiene_password: bool  # siempre True (hay password por defecto)
 
 # --- Esquemas para Receta ---
 

@@ -64,6 +64,8 @@ class Configuracion(SQLModel, table=True):
     doctor_especialidad: str = ""
     doctor_matricula: str = ""
     firma_ruta: Optional[str] = None  # Ruta a la firma digitalizada
+    password_hash: Optional[str] = None  # Hash bcrypt de la contraseña de acceso
+    pedir_password_al_iniciar: bool = Field(default=True)  # Si False, entra directo sin login
 
 class Receta(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

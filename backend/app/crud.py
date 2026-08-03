@@ -105,10 +105,34 @@ def delete_documento(db: Session, documento_id: int) -> bool:
 
 # --- CRUD Configuración ---
 
+DEFAULT_PASSWORD = "HistoryAR2826"
+
+def _hash_password(password: str) -> str:
+    import bcrypt
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+def _check_password(password: str, hashed: str) -> bool:
+    import bcrypt
+    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+
 def get_configuracion(db: Session) -> Configuracion:
     config = db.get(Configuracion, 1)
     if not config:
-        config = Configuracion(id=1, doctor_nombre="", doctor_especialidad="", doctor_matricula="")
+        # Primera vez: crear con contraseña por defecto hasheada
+        config = Configuracion(
+            id=1,
+            doctor_nombre="",
+            doctor_especialidad="",
+            doctor_matricula="",
+            password_hash=_hash_password(DEFAULT_PASSWORD),
+            pedir_password_al_iniciar=True
+        )
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+    elif config.password_hash is None:
+        # Migración: si ya existía pero sin contraseña, asignar la contraseña por defecto
+        config.password_hash = _hash_password(DEFAULT_PASSWORD)
         db.add(config)
         db.commit()
         db.refresh(config)
@@ -131,6 +155,23 @@ def update_firma_ruta(db: Session, firma_ruta: str) -> Configuracion:
     db.commit()
     db.refresh(config)
     return config
+
+def verificar_password(db: Session, password: str) -> bool:
+    """Verifica si la contraseña provista es correcta."""
+    config = get_configuracion(db)
+    if not config.password_hash:
+        return False
+    return _check_password(password, config.password_hash)
+
+def cambiar_password(db: Session, password_actual: str, password_nueva: str) -> bool:
+    """Cambia la contraseña si la actual es correcta. Devuelve True si tuvo éxito."""
+    config = get_configuracion(db)
+    if not config.password_hash or not _check_password(password_actual, config.password_hash):
+        return False
+    config.password_hash = _hash_password(password_nueva)
+    db.add(config)
+    db.commit()
+    return True
 
 # --- CRUD Recetas ---
 

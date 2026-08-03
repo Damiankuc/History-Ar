@@ -32,7 +32,10 @@ from schemas import (
     RecetaRead,
     CitaCreate,
     CitaRead,
-    CitaReadConPaciente
+    CitaReadConPaciente,
+    LoginRequest,
+    CambiarPasswordRequest,
+    AuthEstadoRead
 )
 import crud
 import scanner
@@ -340,6 +343,78 @@ def read_configuracion(db: Session = Depends(get_session)):
 def update_configuracion(config_in: ConfiguracionUpdate, db: Session = Depends(get_session)):
     """Actualiza los datos de configuración del médico."""
     return crud.update_configuracion(db, config_in)
+
+# --- Endpoints de Autenticación ---
+
+@app.get("/api/auth/estado", response_model=AuthEstadoRead)
+def auth_estado(db: Session = Depends(get_session)):
+    """Devuelve si la app requiere contraseña al iniciar. El frontend la consulta al arrancar."""
+    config = crud.get_configuracion(db)
+    return AuthEstadoRead(
+        pedir_password_al_iniciar=config.pedir_password_al_iniciar,
+        tiene_password=config.password_hash is not None
+    )
+
+@app.post("/api/auth/login")
+def auth_login(req: LoginRequest, db: Session = Depends(get_session)):
+    """Verifica la contraseña de acceso. Devuelve ok=True si es correcta."""
+    ok = crud.verificar_password(db, req.password)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Contraseña incorrecta"
+        )
+    return {"ok": True}
+
+@app.post("/api/auth/cambiar-password")
+def auth_cambiar_password(req: CambiarPasswordRequest, db: Session = Depends(get_session)):
+    """Cambia la contraseña de acceso. Requiere la contraseña actual para confirmar."""
+    ok = crud.cambiar_password(db, req.password_actual, req.password_nueva)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="La contraseña actual es incorrecta"
+        )
+    return {"ok": True, "message": "Contraseña actualizada con éxito"}
+
+# --- Endpoint de Extracción de Texto de PDF ---
+
+@app.post("/api/pdf/extraer-texto")
+def extraer_texto_pdf(file: UploadFile = File(...)):
+    """Extrae el texto de un archivo PDF para pre-cargar en una nueva consulta."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El archivo debe ser un PDF (.pdf)"
+        )
+    try:
+        import pdfplumber
+        import io
+        contenido = file.file.read()
+        texto_total = ""
+        with pdfplumber.open(io.BytesIO(contenido)) as pdf:
+            partes = []
+            num_paginas = len(pdf.pages)
+            for pagina in pdf.pages:
+                texto_pagina = pagina.extract_text()
+                if texto_pagina:
+                    partes.append(texto_pagina.strip())
+            texto_total = "\n\n".join(partes)
+        
+        if not texto_total.strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="No se pudo extraer texto del PDF. El archivo puede ser una imagen escaneada sin texto seleccionable."
+            )
+        
+        return {"texto": texto_total, "paginas": num_paginas}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al procesar el PDF: {str(e)}"
+        )
 
 @app.post("/api/configuracion/firma", response_model=ConfiguracionRead)
 def subir_firma_doctor(file: UploadFile = File(...), db: Session = Depends(get_session)):

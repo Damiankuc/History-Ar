@@ -102,7 +102,8 @@ function App() {
     doctor_nombre: "",
     doctor_especialidad: "",
     doctor_matricula: "",
-    firma_ruta: ""
+    firma_ruta: "",
+    pedir_password_al_iniciar: true
   });
 
   // Estados formularios Fase 2
@@ -127,6 +128,27 @@ function App() {
 
   const [restoring, setRestoring] = useState(false);
 
+  // --- Estados de Autenticación ---
+  // "checking": verificando con el backend, "login": mostrar pantalla de login, "ready": app desbloqueada
+  const [appState, setAppState] = useState<"checking" | "login" | "ready">("checking");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // --- Estados del formulario de cambio de contraseña (en Configuración) ---
+  const [passwordForm, setPasswordForm] = useState({
+    password_actual: "",
+    password_nueva: "",
+    password_confirm: ""
+  });
+  const [passwordMsg, setPasswordMsg] = useState<{type: "ok" | "err"; text: string} | null>(null);
+  const [showPasswordFields, setShowPasswordFields] = useState(false);
+
+  // --- Estados de importación de PDF ---
+  const [importingPdf, setImportingPdf] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState<{texto: string; paginas: number} | null>(null);
+
   // Estados de formularios originales
   const [newPaciente, setNewPaciente] = useState({
     nombre: "",
@@ -149,10 +171,160 @@ function App() {
   const API_BASE_URL = "http://localhost:8000/api";
   const FILE_BASE_URL = "http://localhost:8000";
 
-  // Verificar estado del Backend y cargar pacientes
+  // Al arrancar: verificar el estado de autenticación del backend
   useEffect(() => {
-    checkApiAndLoad();
-  }, [searchTerm]);
+    initApp();
+  }, []);
+
+  // Cuando ya está listo, recargar pacientes al cambiar búsqueda
+  useEffect(() => {
+    if (appState === "ready") {
+      checkApiAndLoad();
+    }
+  }, [searchTerm, appState]);
+
+  const initApp = async () => {
+    try {
+      const healthRes = await fetch(`${API_BASE_URL}/health`);
+      if (!healthRes.ok) {
+        // Backend offline, igual mostrar la app (el banner de API offline se encarga)
+        setAppState("ready");
+        setApiOnline(false);
+        return;
+      }
+      setApiOnline(true);
+      // Consultar si se debe pedir contraseña
+      const authRes = await fetch(`${API_BASE_URL}/auth/estado`);
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        if (authData.pedir_password_al_iniciar) {
+          setAppState("login");
+        } else {
+          setAppState("ready");
+        }
+      } else {
+        setAppState("ready");
+      }
+    } catch {
+      setApiOnline(false);
+      setAppState("ready");
+    }
+  };
+
+  // Handler de Login
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginPassword) { setLoginError("Por favor ingresá la contraseña."); return; }
+    try {
+      setLoginLoading(true);
+      setLoginError("");
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: loginPassword })
+      });
+      if (res.ok) {
+        setLoginPassword("");
+        setAppState("ready");
+      } else {
+        setLoginError("Contraseña incorrecta. Intentá de nuevo.");
+      }
+    } catch {
+      setLoginError("Error de conexión. Intentá de nuevo.");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // Handler de Cambio de Contraseña (desde Configuración)
+  const handleCambiarPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMsg(null);
+    if (!passwordForm.password_actual || !passwordForm.password_nueva) {
+      setPasswordMsg({ type: "err", text: "Completá todos los campos." }); return;
+    }
+    if (passwordForm.password_nueva !== passwordForm.password_confirm) {
+      setPasswordMsg({ type: "err", text: "La nueva contraseña y su confirmación no coinciden." }); return;
+    }
+    if (passwordForm.password_nueva.length < 6) {
+      setPasswordMsg({ type: "err", text: "La nueva contraseña debe tener al menos 6 caracteres." }); return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/cambiar-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password_actual: passwordForm.password_actual,
+          password_nueva: passwordForm.password_nueva
+        })
+      });
+      if (res.ok) {
+        setPasswordMsg({ type: "ok", text: "✓ Contraseña actualizada con éxito." });
+        setPasswordForm({ password_actual: "", password_nueva: "", password_confirm: "" });
+        setShowPasswordFields(false);
+      } else {
+        setPasswordMsg({ type: "err", text: "La contraseña actual es incorrecta." });
+      }
+    } catch {
+      setPasswordMsg({ type: "err", text: "Error de conexión." });
+    }
+  };
+
+  // Handler de Toggle "Pedir contraseña al iniciar"
+  const handleTogglePasswordLogin = async (nuevoValor: boolean) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/configuracion`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pedir_password_al_iniciar: nuevoValor })
+      });
+      if (res.ok) {
+        setConfiguracion(prev => ({ ...prev, pedir_password_al_iniciar: nuevoValor }));
+      }
+    } catch { /* silencioso */ }
+  };
+
+  // Handler de Importar PDF como Consulta
+  const handleImportarPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedPaciente || !e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      setImportingPdf(true);
+      const res = await fetch(`${API_BASE_URL}/pdf/extraer-texto`, {
+        method: "POST",
+        body: formData
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPdfPreview({ texto: data.texto, paginas: data.paginas });
+      } else {
+        const err = await res.json();
+        alert(`Error al procesar el PDF: ${err.detail || "Inténtalo de nuevo."}`);
+      }
+    } catch {
+      alert("Error de conexión al procesar el PDF.");
+    } finally {
+      setImportingPdf(false);
+      e.target.value = "";
+    }
+  };
+
+  // Confirmar importación de PDF → cargar en formulario de nueva consulta
+  const handleConfirmarPdfImport = () => {
+    if (!pdfPreview) return;
+    // Pre-cargar el texto en el formulario de nueva consulta
+    setNewConsulta({
+      motivo: "Historia clínica importada de PDF",
+      diagnostico: pdfPreview.texto,
+      tratamiento: "",
+      notas: ""
+    });
+    setPdfPreview(null);
+    // Navegar a la pestaña de consultas para que el médico edite y guarde
+    setPatientSubTab("consultas");
+  };
 
   const checkApiAndLoad = async () => {
     try {
@@ -702,6 +874,141 @@ function App() {
     }, 150);
   };
 
+  // --- Pantalla de verificación / login ---
+  if (appState === "checking") {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-dark, #0f172a)" }}>
+        <div style={{ textAlign: "center", color: "#94a3b8" }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>⏳</div>
+          <p style={{ fontSize: "1rem" }}>Iniciando History-Ar...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (appState === "login") {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+        fontFamily: "'Inter', sans-serif"
+      }}>
+        <div style={{
+          background: "rgba(30,41,59,0.95)",
+          border: "1px solid rgba(99,102,241,0.25)",
+          borderRadius: "20px",
+          padding: "3rem 3.5rem",
+          width: "100%",
+          maxWidth: "420px",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1)"
+        }}>
+          {/* Logo */}
+          <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+            <div style={{
+              width: "70px",
+              height: "70px",
+              borderRadius: "18px",
+              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "2rem",
+              margin: "0 auto 1rem",
+              boxShadow: "0 8px 32px rgba(99,102,241,0.4)"
+            }}>H</div>
+            <h1 style={{ color: "#f1f5f9", fontSize: "1.6rem", fontWeight: 700, margin: 0 }}>History-Ar</h1>
+            <p style={{ color: "#64748b", fontSize: "0.9rem", marginTop: "0.4rem" }}>Sistema de Historias Médicas</p>
+          </div>
+
+          {/* Formulario */}
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", color: "#94a3b8", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.6rem", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                Contraseña de Acceso
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  id="login-password"
+                  type={showLoginPassword ? "text" : "password"}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Ingresá tu contraseña..."
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    padding: "0.85rem 3rem 0.85rem 1rem",
+                    background: "rgba(15,23,42,0.6)",
+                    border: `1px solid ${loginError ? "rgba(239,68,68,0.5)" : "rgba(99,102,241,0.3)"}`,
+                    borderRadius: "10px",
+                    color: "#f1f5f9",
+                    fontSize: "1rem",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    transition: "border-color 0.2s"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(v => !v)}
+                  style={{
+                    position: "absolute",
+                    right: "0.75rem",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#64748b",
+                    fontSize: "1.1rem",
+                    padding: "0.2rem"
+                  }}
+                >
+                  {showLoginPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
+              {loginError && (
+                <p style={{ color: "#ef4444", fontSize: "0.85rem", marginTop: "0.5rem", margin: "0.5rem 0 0" }}>
+                  ⚠️ {loginError}
+                </p>
+              )}
+            </div>
+
+            <button
+              id="btn-login-ingresar"
+              type="submit"
+              disabled={loginLoading}
+              style={{
+                width: "100%",
+                padding: "0.9rem",
+                background: loginLoading
+                  ? "rgba(99,102,241,0.5)"
+                  : "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                border: "none",
+                borderRadius: "10px",
+                color: "white",
+                fontWeight: 700,
+                fontSize: "1rem",
+                cursor: loginLoading ? "not-allowed" : "pointer",
+                transition: "opacity 0.2s, transform 0.1s",
+                boxShadow: "0 4px 15px rgba(99,102,241,0.35)"
+              }}
+            >
+              {loginLoading ? "Verificando..." : "🔓 Ingresar"}
+            </button>
+          </form>
+
+          <p style={{ textAlign: "center", color: "#475569", fontSize: "0.78rem", marginTop: "2rem", lineHeight: 1.5 }}>
+            Contraseña por defecto: <code style={{ color: "#94a3b8", background: "rgba(0,0,0,0.3)", padding: "1px 5px", borderRadius: "4px" }}>HistoryAR2826</code><br />
+            Podés cambiarla en <strong style={{ color: "#6366f1" }}>Configuración → Seguridad</strong>.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* Sidebar de Navegación */}
@@ -1005,7 +1312,7 @@ function App() {
                             <button 
                               className="btn btn-secondary" 
                               onClick={() => document.getElementById("file-upload")?.click()}
-                              disabled={uploading || scanning}
+                              disabled={uploading || scanning || importingPdf}
                             >
                               📁 {uploading ? "Subiendo archivo..." : "Cargar Archivo (PDF/Imagen)"}
                             </button>
@@ -1013,9 +1320,27 @@ function App() {
                             <button 
                               className="btn btn-primary" 
                               onClick={handleScanDocument}
-                              disabled={uploading || scanning}
+                              disabled={uploading || scanning || importingPdf}
                             >
                               📸 {scanning ? "Iniciando escáner..." : "Escanear Documento Físico"}
+                            </button>
+
+                            {/* Botón Importar PDF como consulta */}
+                            <input
+                              type="file"
+                              id="pdf-import-upload"
+                              onChange={handleImportarPdf}
+                              style={{ display: "none" }}
+                              accept=".pdf"
+                            />
+                            <button
+                              id="btn-importar-pdf-consulta"
+                              className="btn btn-secondary"
+                              onClick={() => document.getElementById("pdf-import-upload")?.click()}
+                              disabled={uploading || scanning || importingPdf}
+                              style={{ borderColor: "rgba(139,92,246,0.4)", color: "#8b5cf6" }}
+                            >
+                              📄 {importingPdf ? "Leyendo PDF..." : "Importar PDF como Consulta"}
                             </button>
                           </div>
 
@@ -1023,6 +1348,44 @@ function App() {
                             <div style={{ marginTop: "1.5rem", padding: "12px", backgroundColor: "var(--primary-light)", borderRadius: "8px", border: "1px solid var(--primary)", color: "var(--primary)", fontSize: "0.95rem" }}>
                               ⏳ <strong>Conectando con el digitalizador de Windows (WIA)...</strong><br />
                               Por favor selecciona tu escáner y presiona "Escanear" en el diálogo emergente del sistema.
+                            </div>
+                          )}
+
+                          {/* Modal / preview del PDF importado */}
+                          {pdfPreview && (
+                            <div style={{
+                              marginTop: "1.5rem",
+                              padding: "1.25rem",
+                              background: "rgba(139,92,246,0.07)",
+                              border: "1px solid rgba(139,92,246,0.3)",
+                              borderRadius: "10px"
+                            }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                                <strong style={{ color: "#8b5cf6", fontSize: "0.95rem" }}>
+                                  📄 Texto extraído del PDF ({pdfPreview.paginas} {pdfPreview.paginas === 1 ? "página" : "páginas"})
+                                </strong>
+                                <button className="btn btn-secondary" style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }} onClick={() => setPdfPreview(null)}>
+                                  ✕ Descartar
+                                </button>
+                              </div>
+                              <textarea
+                                className="form-input"
+                                rows={8}
+                                style={{ resize: "vertical", fontSize: "0.85rem", fontFamily: "monospace", whiteSpace: "pre-wrap" }}
+                                value={pdfPreview.texto}
+                                onChange={(e) => setPdfPreview({ ...pdfPreview, texto: e.target.value })}
+                              />
+                              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.5rem", marginBottom: "1rem" }}>
+                                💡 Podés editar el texto antes de importarlo. Al confirmar, se pre-cargará en el formulario de nueva consulta.
+                              </p>
+                              <button
+                                id="btn-confirmar-pdf-import"
+                                className="btn btn-primary"
+                                onClick={handleConfirmarPdfImport}
+                                style={{ width: "100%" }}
+                              >
+                                ✅ Importar como Nueva Consulta
+                              </button>
                             </div>
                           )}
                         </div>
@@ -1509,7 +1872,7 @@ function App() {
 
         {/* Pantalla 4: Configuración Médica y Backup (Fase 2) */}
         {activeTab === "configuracion" && (
-          <div className="fade-in" style={{ maxWidth: "800px", margin: "0 auto" }}>
+          <div className="fade-in" style={{ maxWidth: "860px", margin: "0 auto" }}>
             <h2 style={{ marginBottom: "1.5rem" }}>⚙️ Configuración del Consultorio</h2>
             
             <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "2rem" }}>
@@ -1584,44 +1947,164 @@ function App() {
                 </div>
               </div>
 
-              {/* Copias de Seguridad */}
-              <div className="card" style={{ height: "fit-content" }}>
-                <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Resguardo de Información</h3>
-                <p style={{ fontSize: "0.9rem", color: "var(--text-main)", marginBottom: "1.5rem", lineHeight: 1.4 }}>
-                  Mantén a salvo el historial de tus pacientes. Exporta copias de seguridad de forma periódica. El respaldo contiene todas las fichas de pacientes, el historial de consultas, turnos de agenda y los documentos escaneados o adjuntos.
-                </p>
-                
-                <button 
-                  className="btn btn-primary" 
-                  style={{ width: "100%", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
-                  onClick={handleDownloadBackup}
-                  disabled={restoring}
-                >
-                  📥 Descargar Copia (.zip)
-                </button>
+              {/* Columna derecha: Seguridad + Backup */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
 
-                <div style={{ borderTop: "1px solid var(--border-color)", marginTop: "1.5rem", paddingTop: "1.5rem" }}>
-                  <label className="form-label" style={{ display: "block", marginBottom: "0.5rem" }}>
-                    Restaurar un Respaldo Anterior
-                  </label>
-                  <input 
-                    type="file" 
-                    id="restore-upload"
-                    accept=".zip"
-                    onChange={handleRestoreBackup}
-                    style={{ display: "none" }}
-                    disabled={restoring}
-                  />
+                {/* 🔐 Seguridad de Acceso */}
+                <div className="card">
+                  <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>🔐 Seguridad de Acceso</h3>
+
+                  {/* Toggle: Pedir contraseña al iniciar */}
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.85rem 1rem",
+                    background: "rgba(99,102,241,0.07)",
+                    borderRadius: "10px",
+                    border: "1px solid rgba(99,102,241,0.2)",
+                    marginBottom: "1.25rem"
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-main)" }}>Pedir contraseña al iniciar</div>
+                      <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                        Si está activo, se solicita la contraseña al abrir la app.
+                      </div>
+                    </div>
+                    <button
+                      id="toggle-password-login"
+                      type="button"
+                      onClick={() => handleTogglePasswordLogin(!configuracion.pedir_password_al_iniciar)}
+                      style={{
+                        width: "48px",
+                        height: "26px",
+                        borderRadius: "13px",
+                        border: "none",
+                        cursor: "pointer",
+                        background: configuracion.pedir_password_al_iniciar
+                          ? "linear-gradient(135deg, #6366f1, #8b5cf6)"
+                          : "rgba(100,116,139,0.3)",
+                        position: "relative",
+                        transition: "background 0.3s",
+                        flexShrink: 0
+                      }}
+                    >
+                      <span style={{
+                        position: "absolute",
+                        top: "3px",
+                        left: configuracion.pedir_password_al_iniciar ? "25px" : "3px",
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "50%",
+                        background: "white",
+                        transition: "left 0.3s",
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.3)"
+                      }} />
+                    </button>
+                  </div>
+
+                  {/* Cambio de contraseña */}
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: "100%", fontSize: "0.9rem" }}
+                    onClick={() => { setShowPasswordFields(v => !v); setPasswordMsg(null); }}
+                  >
+                    🔑 {showPasswordFields ? "Cancelar cambio" : "Cambiar Contraseña"}
+                  </button>
+
+                  {showPasswordFields && (
+                    <form onSubmit={handleCambiarPassword} style={{ marginTop: "1rem" }}>
+                      <div className="form-group">
+                        <label className="form-label">Contraseña Actual</label>
+                        <input
+                          type="password"
+                          className="form-input"
+                          placeholder="Contraseña actual..."
+                          value={passwordForm.password_actual}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, password_actual: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Nueva Contraseña</label>
+                        <input
+                          type="password"
+                          className="form-input"
+                          placeholder="Mínimo 6 caracteres..."
+                          value={passwordForm.password_nueva}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, password_nueva: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Confirmar Nueva Contraseña</label>
+                        <input
+                          type="password"
+                          className="form-input"
+                          placeholder="Repetí la nueva contraseña..."
+                          value={passwordForm.password_confirm}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, password_confirm: e.target.value })}
+                        />
+                      </div>
+                      {passwordMsg && (
+                        <p style={{
+                          padding: "0.6rem 0.9rem",
+                          borderRadius: "8px",
+                          fontSize: "0.85rem",
+                          marginBottom: "0.75rem",
+                          background: passwordMsg.type === "ok" ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
+                          color: passwordMsg.type === "ok" ? "rgb(16,185,129)" : "rgb(239,68,68)",
+                          border: `1px solid ${passwordMsg.type === "ok" ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`
+                        }}>
+                          {passwordMsg.text}
+                        </p>
+                      )}
+                      <button type="submit" className="btn btn-primary" style={{ width: "100%" }}>
+                        Actualizar Contraseña
+                      </button>
+                    </form>
+                  )}
+                </div>
+
+                {/* Copias de Seguridad */}
+                <div className="card">
+                  <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Resguardo de Información</h3>
+                  <p style={{ fontSize: "0.9rem", color: "var(--text-main)", marginBottom: "1.5rem", lineHeight: 1.4 }}>
+                    Mantén a salvo el historial de tus pacientes. Exporta copias de seguridad de forma periódica. El respaldo contiene todas las fichas de pacientes, el historial de consultas, turnos de agenda y los documentos escaneados o adjuntos.
+                  </p>
+                  
                   <button 
-                    className="btn btn-secondary" 
-                    style={{ width: "100%", borderColor: "rgba(239, 68, 68, 0.3)", color: "rgb(239, 68, 68)" }}
-                    onClick={() => document.getElementById("restore-upload")?.click()}
+                    className="btn btn-primary" 
+                    style={{ width: "100%", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                    onClick={handleDownloadBackup}
                     disabled={restoring}
                   >
-                    📤 Cargar y Restaurar Copia
+                    📥 Descargar Copia (.zip)
                   </button>
+
+                  <div style={{ borderTop: "1px solid var(--border-color)", marginTop: "1.5rem", paddingTop: "1.5rem" }}>
+                    <label className="form-label" style={{ display: "block", marginBottom: "0.5rem" }}>
+                      Restaurar un Respaldo Anterior
+                    </label>
+                    <input 
+                      type="file" 
+                      id="restore-upload"
+                      accept=".zip"
+                      onChange={handleRestoreBackup}
+                      style={{ display: "none" }}
+                      disabled={restoring}
+                    />
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ width: "100%", borderColor: "rgba(239, 68, 68, 0.3)", color: "rgb(239, 68, 68)" }}
+                      onClick={() => document.getElementById("restore-upload")?.click()}
+                      disabled={restoring}
+                    >
+                      📤 Cargar y Restaurar Copia
+                    </button>
+                  </div>
                 </div>
-              </div>
+
+              </div>{/* fin columna derecha */}
             </div>
           </div>
         )}
