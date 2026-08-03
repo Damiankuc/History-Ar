@@ -40,6 +40,20 @@ from schemas import (
 import crud
 import scanner
 
+def kill_other_instances():
+    """Mata instancias previas colgadas de History-Ar.exe en segundo plano para liberar el ejecutable y el puerto 8000."""
+    if not getattr(sys, 'frozen', False):
+        return
+    try:
+        current_pid = os.getpid()
+        subprocess.run(
+            ["taskkill", "/F", "/IM", "History-Ar.exe", "/FI", f"PID ne {current_pid}"],
+            capture_output=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+    except Exception:
+        pass
+
 def launch_browser():
     """Abre la aplicación en Edge (Modo App) de forma limpia."""
     time.sleep(1.5)
@@ -48,16 +62,17 @@ def launch_browser():
     except Exception:
         pass
 
-# Monitoreo de inactividad prolongada (15 minutos de inactividad total)
+# Monitoreo de inactividad / cierre de la ventana por heartbeat
 last_heartbeat = time.time()
 
 def monitor_heartbeat():
-    time.sleep(60.0)
+    # Dar 15 segundos al inicio para que Edge cargue e inicie el envío de latidos
+    time.sleep(15.0)
     while True:
-        time.sleep(10.0)
-        # Solo apagar si transcurren más de 15 minutos (900 segundos) de inactividad
-        if time.time() - last_heartbeat > 900.0:
-            print("Inactividad prolongada (15 min). Apagando servidor backend...")
+        time.sleep(2.0)
+        # Si pasan más de 8 segundos sin latidos (el cliente cerró la ventana de Edge), apagar el backend inmediatamente
+        if time.time() - last_heartbeat > 8.0:
+            print("Navegador cerrado por el cliente. Apagando servidor backend...")
             os._exit(0)
 
 @asynccontextmanager
@@ -68,8 +83,9 @@ async def lifespan(app: FastAPI):
     # Migración: agregar columnas nuevas a DBs existentes de versiones anteriores
     _migrate_db()
     
-    # Si la aplicación está compilada (PyInstaller), abrir la ventana de la app
+    # Si la aplicación está compilada (PyInstaller)
     if getattr(sys, 'frozen', False):
+        kill_other_instances()
         threading.Thread(target=launch_browser, daemon=True).start()
         threading.Thread(target=monitor_heartbeat, daemon=True).start()
         
