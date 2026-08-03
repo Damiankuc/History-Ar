@@ -89,6 +89,9 @@ def _migrate_db():
             "ALTER TABLE configuracion ADD COLUMN pedir_password_al_iniciar BOOLEAN NOT NULL DEFAULT 0",
             # Flag: primera apertura completada (False = primera vez, mostrar activación)
             "ALTER TABLE configuracion ADD COLUMN primer_inicio_completado BOOLEAN NOT NULL DEFAULT 0",
+            # Campos nuevos para paciente: Obra social y N° de afiliado
+            "ALTER TABLE paciente ADD COLUMN obra_social TEXT",
+            "ALTER TABLE paciente ADD COLUMN numero_afiliado TEXT",
         ]
         for sql in migrations:
             try:

@@ -54,6 +54,8 @@ interface Paciente {
   telefono?: string;
   email?: string;
   direccion?: string;
+  obra_social?: string;
+  numero_afiliado?: string;
   notas_generales?: string;
   fecha_creacion: string;
   consultas?: Consulta[];
@@ -159,6 +161,8 @@ function App() {
     telefono: "",
     email: "",
     direccion: "",
+    obra_social: "",
+    numero_afiliado: "",
     notas_generales: ""
   });
 
@@ -484,6 +488,8 @@ function App() {
           telefono: "",
           email: "",
           direccion: "",
+          obra_social: "",
+          numero_afiliado: "",
           notas_generales: ""
         });
         setActiveTab("pacientes");
@@ -582,12 +588,18 @@ function App() {
       paciente: selectedPaciente,
       receta: receta
     });
-    setTimeout(() => {
-      document.body.classList.add("printing-recipe");
-      window.print();
+    document.body.classList.add("printing-recipe");
+
+    const cleanup = () => {
       document.body.classList.remove("printing-recipe");
       setPrintRecipeData(null);
-    }, 150);
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+
+    setTimeout(() => {
+      window.print();
+    }, 200);
   };
 
   // Subir Archivo Adjunto
@@ -880,12 +892,18 @@ function App() {
       consultas: sortedList
     });
 
-    setTimeout(() => {
-      document.body.classList.add("printing-history");
-      window.print();
+    document.body.classList.add("printing-history");
+
+    const cleanup = () => {
       document.body.classList.remove("printing-history");
       setPrintData(null);
-    }, 150);
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+
+    setTimeout(() => {
+      window.print();
+    }, 200);
   };
 
   // --- Pantalla de verificación / login ---
@@ -1185,6 +1203,8 @@ function App() {
                       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.95rem" }}>
                         <p><strong>DNI:</strong> {selectedPaciente.dni}</p>
                         <p><strong>Fecha de Nacimiento:</strong> {selectedPaciente.fecha_nacimiento}</p>
+                        <p><strong>Obra Social:</strong> {selectedPaciente.obra_social || "Particular"}</p>
+                        {selectedPaciente.numero_afiliado && <p><strong>N° Afiliado:</strong> {selectedPaciente.numero_afiliado}</p>}
                         <p><strong>Teléfono:</strong> {selectedPaciente.telefono || "No registrado"}</p>
                         <p><strong>Email:</strong> {selectedPaciente.email || "No registrado"}</p>
                         <p><strong>Dirección:</strong> {selectedPaciente.direccion || "No registrado"}</p>
@@ -1738,6 +1758,29 @@ function App() {
                   </div>
                 </div>
 
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                  <div className="form-group">
+                    <label className="form-label">Obra Social / Cobertura</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Ej. OSDE, PAMI, Swiss Medical..."
+                      value={newPaciente.obra_social}
+                      onChange={(e) => setNewPaciente({ ...newPaciente, obra_social: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Número de Afiliado</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Ej. 11-24891302-01"
+                      value={newPaciente.numero_afiliado}
+                      onChange={(e) => setNewPaciente({ ...newPaciente, numero_afiliado: e.target.value })}
+                    />
+                  </div>
+                </div>
+
                 <div className="form-group">
                   <label className="form-label">Dirección</label>
                   <input
@@ -2167,6 +2210,8 @@ function App() {
               <div><strong>Nombre Completo:</strong> {printData.paciente.apellido}, {printData.paciente.nombre}</div>
               <div><strong>Documento (DNI):</strong> {printData.paciente.dni}</div>
               <div><strong>Fecha Nacimiento:</strong> {printData.paciente.fecha_nacimiento}</div>
+              <div><strong>Obra Social:</strong> {printData.paciente.obra_social || "Particular"}</div>
+              <div><strong>N° Afiliado:</strong> {printData.paciente.numero_afiliado || "S/D"}</div>
               <div><strong>Teléfono:</strong> {printData.paciente.telefono || "No registrado"}</div>
               <div><strong>Email:</strong> {printData.paciente.email || "No registrado"}</div>
               <div><strong>Dirección:</strong> {printData.paciente.direccion || "No registrado"}</div>
@@ -2255,6 +2300,8 @@ function App() {
           <div className="recipe-patient-info">
             <div><strong>Paciente:</strong> {printRecipeData.paciente.apellido}, {printRecipeData.paciente.nombre}</div>
             <div><strong>DNI:</strong> {printRecipeData.paciente.dni}</div>
+            <div><strong>Obra Social:</strong> {printRecipeData.paciente.obra_social || "Particular"}</div>
+            <div><strong>N° Afiliado:</strong> {printRecipeData.paciente.numero_afiliado || "S/D"}</div>
             <div><strong>Fecha Nacimiento:</strong> {printRecipeData.paciente.fecha_nacimiento}</div>
             <div><strong>Fecha Emisión:</strong> {new Date(printRecipeData.receta.fecha).toLocaleDateString()}</div>
           </div>

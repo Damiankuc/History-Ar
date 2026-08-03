@@ -10,6 +10,8 @@ class PacienteBase(SQLModel):
     telefono: Optional[str] = None
     email: Optional[str] = None
     direccion: Optional[str] = None
+    obra_social: Optional[str] = None
+    numero_afiliado: Optional[str] = None
     notas_generales: Optional[str] = None
 
 class Paciente(PacienteBase, table=True):

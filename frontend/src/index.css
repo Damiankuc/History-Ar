@@ -270,7 +270,6 @@ body {
   }
   
   /* Ocultar interfaz gráfica en impresión */
-  .app-container, 
   .sidebar, 
   .main-panel, 
   .btn, 
@@ -283,6 +282,15 @@ body {
   button,
   .tabs-container {
     display: none !important;
+  }
+
+  .app-container {
+    display: block !important;
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
   }
   
   /* Control de visibilidad condicional de impresión */
