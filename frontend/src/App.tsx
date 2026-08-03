@@ -238,7 +238,7 @@ function App() {
       } else {
         const errData = await res.json().catch(() => ({}));
         if (isPrimerInicio) {
-          setLoginError("Contraseña de activación incorrecta. La contraseña por defecto es: HistoryAR2826");
+          setLoginError("Contraseña de activación incorrecta. Verificá los datos ingresados.");
         } else {
           setLoginError(errData.detail || "Contraseña incorrecta. Intentá de nuevo.");
         }
@@ -891,10 +891,9 @@ function App() {
   // --- Pantalla de verificación / login ---
   if (appState === "checking") {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-dark, #0f172a)" }}>
-        <div style={{ textAlign: "center", color: "#94a3b8" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>⏳</div>
-          <p style={{ fontSize: "1rem" }}>Iniciando History-Ar...</p>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc", fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ textAlign: "center", color: "#64748b" }}>
+          <p style={{ fontSize: "0.95rem", fontWeight: 500 }}>Iniciando History-Ar...</p>
         </div>
       </div>
     );
@@ -907,59 +906,60 @@ function App() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
-        fontFamily: "'Inter', sans-serif"
+        background: "#f8fafc",
+        fontFamily: "'Inter', sans-serif",
+        padding: "1rem"
       }}>
         <div style={{
-          background: "rgba(30,41,59,0.95)",
-          border: "1px solid rgba(99,102,241,0.25)",
-          borderRadius: "20px",
-          padding: "3rem 3.5rem",
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "16px",
+          padding: "2.5rem 2rem",
           width: "100%",
-          maxWidth: "420px",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1)"
+          maxWidth: "380px",
+          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01)"
         }}>
-          {/* Logo */}
-          <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+          {/* Logo y Encabezado */}
+          <div style={{ textAlign: "center", marginBottom: "2rem" }}>
             <div style={{
-              width: "70px",
-              height: "70px",
-              borderRadius: "18px",
-              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+              width: "56px",
+              height: "56px",
+              borderRadius: "14px",
+              background: "var(--primary, #008080)",
+              color: "#ffffff",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: "2rem",
+              fontSize: "1.75rem",
+              fontWeight: "bold",
               margin: "0 auto 1rem",
-              boxShadow: "0 8px 32px rgba(99,102,241,0.4)"
+              boxShadow: "0 4px 12px rgba(0, 128, 128, 0.25)"
             }}>H</div>
-            <h1 style={{ color: "#f1f5f9", fontSize: "1.6rem", fontWeight: 700, margin: 0 }}>History-Ar</h1>
-            <p style={{ color: "#64748b", fontSize: "0.9rem", marginTop: "0.4rem" }}>Sistema de Historias Médicas</p>
+            <h1 style={{ color: "#0f172a", fontSize: "1.4rem", fontWeight: 700, margin: 0 }}>History-Ar</h1>
+            <p style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.25rem" }}>Sistema de Historias Médicas</p>
 
-            {/* Badge de primera apertura */}
             {isPrimerInicio && (
               <div style={{
                 display: "inline-block",
-                marginTop: "0.85rem",
-                padding: "0.3rem 0.9rem",
-                background: "rgba(245,158,11,0.15)",
-                border: "1px solid rgba(245,158,11,0.4)",
+                marginTop: "0.75rem",
+                padding: "0.25rem 0.75rem",
+                background: "#eff6ff",
+                border: "1px solid #bfdbfe",
                 borderRadius: "20px",
-                color: "#f59e0b",
+                color: "#1d4ed8",
                 fontSize: "0.75rem",
-                fontWeight: 700,
-                letterSpacing: "0.04em"
+                fontWeight: 600
               }}>
-                🔑 PRIMERA APERTURA — ACTIVACIÓN ÚNICA
+                Activación de primer uso
               </div>
             )}
           </div>
 
           {/* Formulario */}
           <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label style={{ display: "block", color: "#94a3b8", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.6rem", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                {isPrimerInicio ? "Contraseña de Activación" : "Contraseña de Acceso"}
+            <div style={{ marginBottom: "1.25rem" }}>
+              <label style={{ display: "block", color: "#334155", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+                {isPrimerInicio ? "Contraseña de activación" : "Contraseña de acceso"}
               </label>
               <div style={{ position: "relative" }}>
                 <input
@@ -967,16 +967,16 @@ function App() {
                   type={showLoginPassword ? "text" : "password"}
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder={isPrimerInicio ? "Ingresá la contraseña de activación..." : "Ingresá tu contraseña..."}
+                  placeholder="Ingresá la contraseña..."
                   autoFocus
                   style={{
                     width: "100%",
-                    padding: "0.85rem 3rem 0.85rem 1rem",
-                    background: "rgba(15,23,42,0.6)",
-                    border: `1px solid ${loginError ? "rgba(239,68,68,0.5)" : "rgba(99,102,241,0.3)"}`,
-                    borderRadius: "10px",
-                    color: "#f1f5f9",
-                    fontSize: "1rem",
+                    padding: "0.75rem 4.2rem 0.75rem 0.85rem",
+                    background: "#ffffff",
+                    border: `1px solid ${loginError ? "#fca5a5" : "#cbd5e1"}`,
+                    borderRadius: "8px",
+                    color: "#0f172a",
+                    fontSize: "0.95rem",
                     outline: "none",
                     boxSizing: "border-box",
                     transition: "border-color 0.2s"
@@ -987,24 +987,33 @@ function App() {
                   onClick={() => setShowLoginPassword(v => !v)}
                   style={{
                     position: "absolute",
-                    right: "0.75rem",
+                    right: "0.6rem",
                     top: "50%",
                     transform: "translateY(-50%)",
                     background: "none",
                     border: "none",
                     cursor: "pointer",
                     color: "#64748b",
-                    fontSize: "1.1rem",
-                    padding: "0.2rem"
+                    fontSize: "0.78rem",
+                    fontWeight: 500,
+                    padding: "0.25rem 0.4rem"
                   }}
                 >
-                  {showLoginPassword ? "🙈" : "👁️"}
+                  {showLoginPassword ? "Ocultar" : "Mostrar"}
                 </button>
               </div>
               {loginError && (
-                <p style={{ color: "#ef4444", fontSize: "0.85rem", marginTop: "0.5rem", margin: "0.5rem 0 0" }}>
-                  ⚠️ {loginError}
-                </p>
+                <div style={{
+                  color: "#b91c1c",
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  borderRadius: "6px",
+                  padding: "0.5rem 0.75rem",
+                  fontSize: "0.825rem",
+                  marginTop: "0.5rem"
+                }}>
+                  {loginError}
+                </div>
               )}
             </div>
 
@@ -1014,40 +1023,25 @@ function App() {
               disabled={loginLoading}
               style={{
                 width: "100%",
-                padding: "0.9rem",
-                background: loginLoading
-                  ? "rgba(99,102,241,0.5)"
-                  : "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                padding: "0.75rem",
+                background: loginLoading ? "#94a3b8" : "var(--primary, #008080)",
                 border: "none",
-                borderRadius: "10px",
-                color: "white",
-                fontWeight: 700,
-                fontSize: "1rem",
+                borderRadius: "8px",
+                color: "#ffffff",
+                fontWeight: 600,
+                fontSize: "0.95rem",
                 cursor: loginLoading ? "not-allowed" : "pointer",
-                transition: "opacity 0.2s, transform 0.1s",
-                boxShadow: "0 4px 15px rgba(99,102,241,0.35)"
+                transition: "background-color 0.2s",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
               }}
             >
-              {loginLoading ? "Verificando..." : (isPrimerInicio ? "🔑 Activar y Entrar" : "🔓 Ingresar")}
+              {loginLoading ? "Verificando..." : (isPrimerInicio ? "Activar e ingresar" : "Ingresar")}
             </button>
           </form>
 
-          {/* Pie de pantalla — solo en primer inicio muestra la contraseña por defecto */}
-          {isPrimerInicio ? (
-            <div style={{ marginTop: "2rem", padding: "1rem", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "10px" }}>
-              <p style={{ color: "#94a3b8", fontSize: "0.78rem", lineHeight: 1.6, margin: 0, textAlign: "center" }}>
-                Esta es la única vez que se solicitará la contraseña de activación.<br />
-                Contraseña por defecto: <code style={{ color: "#f59e0b", background: "rgba(0,0,0,0.3)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.85rem" }}>HistoryAR2826</code><br />
-                <span style={{ color: "#64748b", fontSize: "0.73rem" }}>Podés cambiarla luego en Configuración → Seguridad.</span>
-              </p>
-            </div>
-          ) : (
-            <p style={{ textAlign: "center", color: "#475569", fontSize: "0.78rem", marginTop: "2rem", lineHeight: 1.5 }}>
-              History-Ar — Acceso protegido<br />
-              <span style={{ color: "#334155" }}>¿Olvidaste la contraseña? Contactá al administrador del sistema.</span>
-            </p>
-          )}
-
+          <p style={{ textAlign: "center", color: "#94a3b8", fontSize: "0.78rem", marginTop: "1.75rem", marginBottom: 0 }}>
+            {isPrimerInicio ? "Esta activación solo se requiere una vez al instalar." : "History-Ar — Acceso protegido"}
+          </p>
         </div>
       </div>
     );
