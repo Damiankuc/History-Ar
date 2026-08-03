@@ -66,6 +66,10 @@ def monitor_heartbeat():
 async def lifespan(app: FastAPI):
     # Inicializa las tablas de SQLite en el arranque del servidor
     create_db_and_tables()
+
+    # Migración: agregar columnas nuevas a DBs existentes de versiones anteriores
+    # SQLite no soporta IF NOT EXISTS en ALTER TABLE, pero podemos usar try/except
+    _migrate_db()
     
     # Si la aplicación está compilada (PyInstaller), abrir el navegador en Modo App y monitorear actividad
     if getattr(sys, 'frozen', False):
@@ -73,6 +77,27 @@ async def lifespan(app: FastAPI):
         threading.Thread(target=monitor_heartbeat, daemon=True).start()
         
     yield
+
+def _migrate_db():
+    """Agrega columnas nuevas a la tabla configuracion si no existen (compatibilidad con DBs antiguas)."""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        migrations = [
+            # Columna de contraseña hasheada (bcrypt)
+            "ALTER TABLE configuracion ADD COLUMN password_hash TEXT",
+            # Toggle: pedir contraseña en cada arranque (False = entra directo)
+            "ALTER TABLE configuracion ADD COLUMN pedir_password_al_iniciar BOOLEAN NOT NULL DEFAULT 0",
+            # Flag: primera apertura completada (False = primera vez, mostrar activación)
+            "ALTER TABLE configuracion ADD COLUMN primer_inicio_completado BOOLEAN NOT NULL DEFAULT 0",
+        ]
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                # La columna ya existe — ignorar el error
+                pass
+
 
 app = FastAPI(
     title="History-Ar API",
