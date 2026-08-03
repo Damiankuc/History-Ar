@@ -181,6 +181,14 @@ function App() {
     initApp();
   }, []);
 
+  // Latido continuo de conexión (heartbeat) para mantener el backend activo
+  useEffect(() => {
+    const hbInterval = setInterval(() => {
+      fetch(`${API_BASE_URL}/heartbeat`, { method: "POST" }).catch(() => {});
+    }, 2500);
+    return () => clearInterval(hbInterval);
+  }, []);
+
   // Cuando ya está listo, recargar pacientes al cambiar búsqueda
   useEffect(() => {
     if (appState === "ready") {
@@ -410,9 +418,12 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         setSelectedPaciente(data);
+      } else {
+        alert("No se pudo cargar la información del paciente seleccionada.");
       }
     } catch (err) {
       console.error("Error al cargar detalles del paciente", err);
+      alert("Error de conexión al cargar el paciente. Verifica que el servidor esté activo.");
     } finally {
       setLoading(false);
     }

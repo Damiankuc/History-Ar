@@ -53,12 +53,12 @@ def launch_browser():
 last_heartbeat = time.time()
 
 def monitor_heartbeat():
-    # Dar 12 segundos al inicio para permitir que se abra la ventana y mande el primer latido
-    time.sleep(12.0)
+    # Dar 60 segundos al inicio para permitir que se abra la ventana y mande latidos
+    time.sleep(60.0)
     while True:
-        time.sleep(2.0)
-        # Si han pasado más de 7 segundos sin recibir un latido, asumimos que el navegador se cerró
-        if time.time() - last_heartbeat > 7.0:
+        time.sleep(5.0)
+        # Si han pasado más de 45 segundos sin recibir un latido, asumimos que el navegador se cerró
+        if time.time() - last_heartbeat > 45.0:
             print("No heartbeat received from frontend. Shutting down FastAPI backend...")
             os._exit(0)
 
