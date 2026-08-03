@@ -348,23 +348,44 @@ def update_configuracion(config_in: ConfiguracionUpdate, db: Session = Depends(g
 
 @app.get("/api/auth/estado", response_model=AuthEstadoRead)
 def auth_estado(db: Session = Depends(get_session)):
-    """Devuelve si la app requiere contraseña al iniciar. El frontend la consulta al arrancar."""
+    """Devuelve el estado de autenticación. El frontend lo consulta al arrancar para decidir qué mostrar:
+    - primer_inicio_completado=False → mostrar pantalla de activación (solo la primera vez)
+    - pedir_password_al_iniciar=True → mostrar login normal en cada arranque
+    - ambos False → entrar directo a la app
+    """
     config = crud.get_configuracion(db)
     return AuthEstadoRead(
         pedir_password_al_iniciar=config.pedir_password_al_iniciar,
-        tiene_password=config.password_hash is not None
+        tiene_password=config.password_hash is not None,
+        primer_inicio_completado=config.primer_inicio_completado
     )
 
 @app.post("/api/auth/login")
 def auth_login(req: LoginRequest, db: Session = Depends(get_session)):
-    """Verifica la contraseña de acceso. Devuelve ok=True si es correcta."""
+    """Verifica la contraseña de acceso.
+    Si es el primer inicio (primer_inicio_completado=False), también marca la activación
+    y desactiva el login automático para los arranques siguientes.
+    """
+    config = crud.get_configuracion(db)
+
+    # Caso 1: Primer inicio — verificar y activar
+    if not config.primer_inicio_completado:
+        ok = crud.completar_primer_inicio(db, req.password)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Contraseña de activación incorrecta"
+            )
+        return {"ok": True, "primer_inicio": True}
+
+    # Caso 2: Login normal (pedir_password_al_iniciar=True)
     ok = crud.verificar_password(db, req.password)
     if not ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Contraseña incorrecta"
         )
-    return {"ok": True}
+    return {"ok": True, "primer_inicio": False}
 
 @app.post("/api/auth/cambiar-password")
 def auth_cambiar_password(req: CambiarPasswordRequest, db: Session = Depends(get_session)):

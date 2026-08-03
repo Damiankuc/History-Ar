@@ -61,6 +61,7 @@ class CambiarPasswordRequest(SQLModel):
 class AuthEstadoRead(SQLModel):
     pedir_password_al_iniciar: bool
     tiene_password: bool  # siempre True (hay password por defecto)
+    primer_inicio_completado: bool  # False = primera vez, debe pedir activación
 
 # --- Esquemas para Receta ---
 

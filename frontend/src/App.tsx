@@ -131,6 +131,7 @@ function App() {
   // --- Estados de Autenticación ---
   // "checking": verificando con el backend, "login": mostrar pantalla de login, "ready": app desbloqueada
   const [appState, setAppState] = useState<"checking" | "login" | "ready">("checking");
+  const [isPrimerInicio, setIsPrimerInicio] = useState(false); // true = primera vez (activación)
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -193,13 +194,20 @@ function App() {
         return;
       }
       setApiOnline(true);
-      // Consultar si se debe pedir contraseña
+      // Consultar estado de autenticación
       const authRes = await fetch(`${API_BASE_URL}/auth/estado`);
       if (authRes.ok) {
         const authData = await authRes.json();
-        if (authData.pedir_password_al_iniciar) {
+        if (!authData.primer_inicio_completado) {
+          // PRIMERA VEZ: pedir activación (solo esta vez, nunca más)
+          setIsPrimerInicio(true);
+          setAppState("login");
+        } else if (authData.pedir_password_al_iniciar) {
+          // Login opcional habilitado por el doctor en Configuración
+          setIsPrimerInicio(false);
           setAppState("login");
         } else {
+          // Entrar directo
           setAppState("ready");
         }
       } else {
@@ -211,7 +219,7 @@ function App() {
     }
   };
 
-  // Handler de Login
+  // Handler de Login (primer inicio o login normal)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginPassword) { setLoginError("Por favor ingresá la contraseña."); return; }
@@ -225,9 +233,15 @@ function App() {
       });
       if (res.ok) {
         setLoginPassword("");
+        setIsPrimerInicio(false);
         setAppState("ready");
       } else {
-        setLoginError("Contraseña incorrecta. Intentá de nuevo.");
+        const errData = await res.json().catch(() => ({}));
+        if (isPrimerInicio) {
+          setLoginError("Contraseña de activación incorrecta. La contraseña por defecto es: HistoryAR2826");
+        } else {
+          setLoginError(errData.detail || "Contraseña incorrecta. Intentá de nuevo.");
+        }
       }
     } catch {
       setLoginError("Error de conexión. Intentá de nuevo.");
@@ -921,13 +935,31 @@ function App() {
             }}>H</div>
             <h1 style={{ color: "#f1f5f9", fontSize: "1.6rem", fontWeight: 700, margin: 0 }}>History-Ar</h1>
             <p style={{ color: "#64748b", fontSize: "0.9rem", marginTop: "0.4rem" }}>Sistema de Historias Médicas</p>
+
+            {/* Badge de primera apertura */}
+            {isPrimerInicio && (
+              <div style={{
+                display: "inline-block",
+                marginTop: "0.85rem",
+                padding: "0.3rem 0.9rem",
+                background: "rgba(245,158,11,0.15)",
+                border: "1px solid rgba(245,158,11,0.4)",
+                borderRadius: "20px",
+                color: "#f59e0b",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                letterSpacing: "0.04em"
+              }}>
+                🔑 PRIMERA APERTURA — ACTIVACIÓN ÚNICA
+              </div>
+            )}
           </div>
 
           {/* Formulario */}
           <form onSubmit={handleLogin}>
             <div style={{ marginBottom: "1.5rem" }}>
               <label style={{ display: "block", color: "#94a3b8", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.6rem", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                Contraseña de Acceso
+                {isPrimerInicio ? "Contraseña de Activación" : "Contraseña de Acceso"}
               </label>
               <div style={{ position: "relative" }}>
                 <input
@@ -935,7 +967,7 @@ function App() {
                   type={showLoginPassword ? "text" : "password"}
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="Ingresá tu contraseña..."
+                  placeholder={isPrimerInicio ? "Ingresá la contraseña de activación..." : "Ingresá tu contraseña..."}
                   autoFocus
                   style={{
                     width: "100%",
@@ -996,14 +1028,26 @@ function App() {
                 boxShadow: "0 4px 15px rgba(99,102,241,0.35)"
               }}
             >
-              {loginLoading ? "Verificando..." : "🔓 Ingresar"}
+              {loginLoading ? "Verificando..." : (isPrimerInicio ? "🔑 Activar y Entrar" : "🔓 Ingresar")}
             </button>
           </form>
 
-          <p style={{ textAlign: "center", color: "#475569", fontSize: "0.78rem", marginTop: "2rem", lineHeight: 1.5 }}>
-            Contraseña por defecto: <code style={{ color: "#94a3b8", background: "rgba(0,0,0,0.3)", padding: "1px 5px", borderRadius: "4px" }}>HistoryAR2826</code><br />
-            Podés cambiarla en <strong style={{ color: "#6366f1" }}>Configuración → Seguridad</strong>.
-          </p>
+          {/* Pie de pantalla — solo en primer inicio muestra la contraseña por defecto */}
+          {isPrimerInicio ? (
+            <div style={{ marginTop: "2rem", padding: "1rem", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "10px" }}>
+              <p style={{ color: "#94a3b8", fontSize: "0.78rem", lineHeight: 1.6, margin: 0, textAlign: "center" }}>
+                Esta es la única vez que se solicitará la contraseña de activación.<br />
+                Contraseña por defecto: <code style={{ color: "#f59e0b", background: "rgba(0,0,0,0.3)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.85rem" }}>HistoryAR2826</code><br />
+                <span style={{ color: "#64748b", fontSize: "0.73rem" }}>Podés cambiarla luego en Configuración → Seguridad.</span>
+              </p>
+            </div>
+          ) : (
+            <p style={{ textAlign: "center", color: "#475569", fontSize: "0.78rem", marginTop: "2rem", lineHeight: 1.5 }}>
+              History-Ar — Acceso protegido<br />
+              <span style={{ color: "#334155" }}>¿Olvidaste la contraseña? Contactá al administrador del sistema.</span>
+            </p>
+          )}
+
         </div>
       </div>
     );

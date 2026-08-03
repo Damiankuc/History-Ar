@@ -119,13 +119,16 @@ def get_configuracion(db: Session) -> Configuracion:
     config = db.get(Configuracion, 1)
     if not config:
         # Primera vez: crear con contraseña por defecto hasheada
+        # primer_inicio_completado=False -> el frontend pedirá la contraseña de activación UNA sola vez
+        # pedir_password_al_iniciar=False -> después de esa primera vez, entra directo
         config = Configuracion(
             id=1,
             doctor_nombre="",
             doctor_especialidad="",
             doctor_matricula="",
             password_hash=_hash_password(DEFAULT_PASSWORD),
-            pedir_password_al_iniciar=True
+            pedir_password_al_iniciar=False,
+            primer_inicio_completado=False
         )
         db.add(config)
         db.commit()
@@ -162,6 +165,19 @@ def verificar_password(db: Session, password: str) -> bool:
     if not config.password_hash:
         return False
     return _check_password(password, config.password_hash)
+
+def completar_primer_inicio(db: Session, password: str) -> bool:
+    """Verifica la contraseña de activación. Si es correcta, marca primer_inicio_completado=True
+    y deja pedir_password_al_iniciar=False para que no vuelva a pedir nunca más.
+    Devuelve True si la contraseña fue correcta."""
+    config = get_configuracion(db)
+    if not config.password_hash or not _check_password(password, config.password_hash):
+        return False
+    config.primer_inicio_completado = True
+    config.pedir_password_al_iniciar = False  # nunca más pedir automáticamente
+    db.add(config)
+    db.commit()
+    return True
 
 def cambiar_password(db: Session, password_actual: str, password_nueva: str) -> bool:
     """Cambia la contraseña si la actual es correcta. Devuelve True si tuvo éxito."""
