@@ -1226,106 +1226,102 @@ function App() {
                 </div>
               )}
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
-                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Nombre *</label>
-                  <input
-                    type="text"
-                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
-                    placeholder="Ej. María"
-                    value={publicPaciente.nombre}
-                    onChange={(e) => setPublicPaciente({ ...publicPaciente, nombre: e.target.value })}
-                    required
-                  />
-                </div>
-                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Apellido *</label>
-                  <input
-                    type="text"
-                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
-                    placeholder="Ej. Gómez"
-                    value={publicPaciente.apellido}
-                    onChange={(e) => setPublicPaciente({ ...publicPaciente, apellido: e.target.value })}
-                    required
-                  />
-                </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Nombre *</label>
+                <input
+                  type="text"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
+                  placeholder="Ej. María"
+                  value={publicPaciente.nombre}
+                  onChange={(e) => setPublicPaciente({ ...publicPaciente, nombre: e.target.value })}
+                  required
+                />
               </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
-                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>DNI / Documento *</label>
-                  <input
-                    type="text"
-                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
-                    placeholder="Sin puntos"
-                    value={publicPaciente.dni}
-                    onChange={(e) => setPublicPaciente({ ...publicPaciente, dni: e.target.value })}
-                    required
-                  />
-                </div>
-                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Fecha Nac. *</label>
-                  <input
-                    type="date"
-                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
-                    value={publicPaciente.fecha_nacimiento}
-                    onChange={(e) => setPublicPaciente({ ...publicPaciente, fecha_nacimiento: e.target.value })}
-                    required
-                  />
-                </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Apellido *</label>
+                <input
+                  type="text"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
+                  placeholder="Ej. Gómez"
+                  value={publicPaciente.apellido}
+                  onChange={(e) => setPublicPaciente({ ...publicPaciente, apellido: e.target.value })}
+                  required
+                />
               </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
-                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Teléfono / WhatsApp</label>
-                  <input
-                    type="text"
-                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
-                    placeholder="Ej. 1123456789"
-                    value={publicPaciente.telefono}
-                    onChange={(e) => setPublicPaciente({ ...publicPaciente, telefono: e.target.value })}
-                  />
-                </div>
-                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Email</label>
-                  <input
-                    type="email"
-                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
-                    placeholder="tu@email.com"
-                    value={publicPaciente.email}
-                    onChange={(e) => setPublicPaciente({ ...publicPaciente, email: e.target.value })}
-                  />
-                </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>DNI / Documento *</label>
+                <input
+                  type="text"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
+                  placeholder="Sin puntos"
+                  value={publicPaciente.dni}
+                  onChange={(e) => setPublicPaciente({ ...publicPaciente, dni: e.target.value })}
+                  required
+                />
               </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
-                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Obra Social / Cobertura</label>
-                  <input
-                    type="text"
-                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
-                    placeholder="Ej. OSDE, Particular"
-                    value={publicPaciente.obra_social}
-                    onChange={(e) => setPublicPaciente({ ...publicPaciente, obra_social: e.target.value })}
-                  />
-                </div>
-                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>N° Afiliado</label>
-                  <input
-                    type="text"
-                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
-                    placeholder="Opcional"
-                    value={publicPaciente.numero_afiliado}
-                    onChange={(e) => setPublicPaciente({ ...publicPaciente, numero_afiliado: e.target.value })}
-                  />
-                </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Fecha Nac. *</label>
+                <input
+                  type="date"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
+                  value={publicPaciente.fecha_nacimiento}
+                  onChange={(e) => setPublicPaciente({ ...publicPaciente, fecha_nacimiento: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Teléfono / WhatsApp</label>
+                <input
+                  type="text"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
+                  placeholder="Ej. 1123456789"
+                  value={publicPaciente.telefono}
+                  onChange={(e) => setPublicPaciente({ ...publicPaciente, telefono: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Email</label>
+                <input
+                  type="email"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
+                  placeholder="tu@email.com"
+                  value={publicPaciente.email}
+                  onChange={(e) => setPublicPaciente({ ...publicPaciente, email: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Obra Social / Cobertura</label>
+                <input
+                  type="text"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
+                  placeholder="Ej. OSDE, Particular"
+                  value={publicPaciente.obra_social}
+                  onChange={(e) => setPublicPaciente({ ...publicPaciente, obra_social: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>N° Afiliado</label>
+                <input
+                  type="text"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
+                  placeholder="Opcional"
+                  value={publicPaciente.numero_afiliado}
+                  onChange={(e) => setPublicPaciente({ ...publicPaciente, numero_afiliado: e.target.value })}
+                />
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1.25rem", boxSizing: "border-box" }}>
                 <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Motivo de Consulta / Antecedentes</label>
                 <textarea
                   rows={2}
-                  style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none", resize: "vertical" }}
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none", resize: "vertical" }}
                   placeholder="Ej. Chequeo anual, dolor de garganta..."
                   value={publicPaciente.notas_generales}
                   onChange={(e) => setPublicPaciente({ ...publicPaciente, notas_generales: e.target.value })}
