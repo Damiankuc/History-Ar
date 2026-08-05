@@ -234,7 +234,7 @@ def get_cita(cita_id: int) -> Optional[Dict[str, Any]]:
 
 def get_citas() -> List[Dict[str, Any]]:
     supabase = get_supabase()
-    res = supabase.table("citas").select("*, paciente:paciente_id(id, nombre, apellido, dni)").order("fecha_hora").execute()
+    res = supabase.table("citas").select("*, paciente:paciente_id(id, nombre, apellido, dni, fecha_nacimiento, telefono, email)").order("fecha_hora").execute()
     return res.data or []
 
 def update_cita_estado(cita_id: int, estado: str) -> Optional[Dict[str, Any]]:

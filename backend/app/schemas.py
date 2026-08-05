@@ -118,8 +118,17 @@ class CitaRead(SQLModel):
     estado: str
     paciente_id: int
 
+class PacienteMinimoRead(BaseModel):
+    id: int
+    nombre: str
+    apellido: str
+    dni: str
+    fecha_nacimiento: Optional[str] = None
+    telefono: Optional[str] = None
+    email: Optional[str] = None
+
 class CitaReadConPaciente(CitaRead):
-    paciente: PacienteRead
+    paciente: Optional[PacienteMinimoRead] = None
 
 # --- Esquemas compuestos para respuestas complejas ---
 
