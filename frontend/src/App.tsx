@@ -237,7 +237,9 @@ function App() {
   const [showPasswordFields, setShowPasswordFields] = useState(false);
 
   // --- Estados de Auto-Registro Público por Código QR ---
-  const isPublicRegisterMode = new URLSearchParams(window.location.search).get("modo") === "autoregistro" || window.location.hash === "#registro";
+  const isVercelDeployment = typeof window !== "undefined" && window.location.hostname.includes("vercel.app");
+  const isPublicRegisterMode = isVercelDeployment || new URLSearchParams(window.location.search).get("modo") === "autoregistro" || window.location.hash === "#registro";
+
   const [publicPaciente, setPublicPaciente] = useState({
     nombre: "",
     apellido: "",
@@ -275,16 +277,39 @@ function App() {
     try {
       setPublicSubmitting(true);
       setPublicError("");
-      const res = await fetch(`${API_BASE_URL}/pacientes`, {
+
+      // Intentar primero vía backend API local
+      let res = await fetch(`${API_BASE_URL}/pacientes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(publicPaciente)
-      });
+      }).catch(() => null);
+
+      // Si la API local no respondió (ej. en Vercel), enviar directamente a Supabase Cloud
+      if (!res || !res.ok) {
+        const SUPABASE_URL = "https://qvutqqfsypzcfjhhzqsk.supabase.co";
+        const SUPABASE_KEY = "sb_publishable_KT61xj__yMLdxD37Wc5Teg_RFfQz6Rm";
+        res = await fetch(`${SUPABASE_URL}/rest/v1/pacientes`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`,
+            "Content-Type": "application/json",
+            "Prefer": "return=representation"
+          },
+          body: JSON.stringify(publicPaciente)
+        });
+      }
+
       if (res.ok) {
         setPublicSuccess(true);
       } else {
         const errData = await res.json().catch(() => ({}));
-        setPublicError(errData.detail || "No se pudo registrar. Verificá si el DNI ya existe.");
+        if (errData.code === "23505" || (errData.message && errData.message.includes("unique constraint"))) {
+          setPublicError(`Ya existe un paciente registrado con el DNI '${publicPaciente.dni}'.`);
+        } else {
+          setPublicError(errData.detail || errData.message || "No se pudo registrar. Verificá si el DNI ya existe.");
+        }
       }
     } catch {
       setPublicError("Error de conexión con el servidor.");
