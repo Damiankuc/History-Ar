@@ -236,6 +236,79 @@ function App() {
   const [passwordMsg, setPasswordMsg] = useState<{type: "ok" | "err"; text: string} | null>(null);
   const [showPasswordFields, setShowPasswordFields] = useState(false);
 
+  // --- Estados de Auto-Registro Público por Código QR ---
+  const isPublicRegisterMode = new URLSearchParams(window.location.search).get("modo") === "autoregistro" || window.location.hash === "#registro";
+  const [publicPaciente, setPublicPaciente] = useState({
+    nombre: "",
+    apellido: "",
+    dni: "",
+    fecha_nacimiento: "",
+    telefono: "",
+    email: "",
+    direccion: "",
+    obra_social: "",
+    numero_afiliado: "",
+    notas_generales: ""
+  });
+  const [publicSubmitting, setPublicSubmitting] = useState(false);
+  const [publicSuccess, setPublicSuccess] = useState(false);
+  const [publicError, setPublicError] = useState("");
+
+  // --- Estados de Código QR para Puerta de Consultorio ---
+  const [qrBaseUrl, setQrBaseUrl] = useState(() => {
+    return localStorage.getItem("history_ar_qr_url") || `${window.location.origin}/?modo=autoregistro`;
+  });
+  const [, setIsPrintingQrPoster] = useState(false);
+
+  const handleSaveQrUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem("history_ar_qr_url", qrBaseUrl);
+    alert("URL del Código QR actualizada correctamente.");
+  };
+
+  const handlePublicRegisterPaciente = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!publicPaciente.nombre || !publicPaciente.apellido || !publicPaciente.dni || !publicPaciente.fecha_nacimiento) {
+      setPublicError("Por favor completa los campos requeridos (*).");
+      return;
+    }
+    try {
+      setPublicSubmitting(true);
+      setPublicError("");
+      const res = await fetch(`${API_BASE_URL}/pacientes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(publicPaciente)
+      });
+      if (res.ok) {
+        setPublicSuccess(true);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setPublicError(errData.detail || "No se pudo registrar. Verificá si el DNI ya existe.");
+      }
+    } catch {
+      setPublicError("Error de conexión con el servidor.");
+    } finally {
+      setPublicSubmitting(false);
+    }
+  };
+
+  const handleTriggerPrintQrPoster = () => {
+    setIsPrintingQrPoster(true);
+    document.body.classList.add("printing-qr-poster");
+
+    const cleanup = () => {
+      document.body.classList.remove("printing-qr-poster");
+      setIsPrintingQrPoster(false);
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+
+    setTimeout(() => {
+      window.print();
+    }, 200);
+  };
+
   // --- Estados de importación de PDF ---
   const [importingPdf, setImportingPdf] = useState(false);
   const [pdfPreview, setPdfPreview] = useState<{texto: string; paginas: number} | null>(null);
@@ -1086,6 +1159,164 @@ function App() {
     }, 200);
   };
 
+  // --- Vista Pública de Auto-Registro en Celulares por Código QR ---
+  if (isPublicRegisterMode) {
+    return (
+      <div className="public-register-bg">
+        <div className="public-register-card">
+          <div className="public-register-header">
+            <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🏥</div>
+            <h1>{configuracion.doctor_nombre || currentUsuario?.nombre || "Consultorio Médico"}</h1>
+            <p>Registro de Pacientes para Ingreso a Sala de Espera</p>
+          </div>
+
+          {publicSuccess ? (
+            <div className="public-success-card">
+              <div className="public-success-icon">✓</div>
+              <h2 style={{ fontSize: "1.25rem", color: "#15803d", marginBottom: "0.5rem", fontWeight: 700 }}>¡Registro Completado con Éxito!</h2>
+              <p style={{ fontSize: "0.9rem", color: "#475569", lineHeight: 1.5, marginBottom: "1.5rem" }}>
+                Tus datos fueron registrados correctamente en el sistema del consultorio. Por favor tomá asiento en la sala de espera, el profesional te llamará a la brevedad.
+              </p>
+              <button 
+                className="btn btn-secondary" 
+                style={{ width: "100%" }}
+                onClick={() => {
+                  setPublicPaciente({
+                    nombre: "", apellido: "", dni: "", fecha_nacimiento: "",
+                    telefono: "", email: "", direccion: "", obra_social: "",
+                    numero_afiliado: "", notas_generales: ""
+                  });
+                  setPublicSuccess(false);
+                  setPublicError("");
+                }}
+              >
+                + Registrar a otro paciente / familiar
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handlePublicRegisterPaciente}>
+              {publicError && (
+                <div style={{ padding: "0.75rem", borderRadius: "8px", background: "rgba(239, 68, 68, 0.1)", color: "rgb(239, 68, 68)", border: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "0.85rem", marginBottom: "1rem" }}>
+                  ⚠️ {publicError}
+                </div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="form-group">
+                  <label className="form-label">Nombre *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej. María"
+                    value={publicPaciente.nombre}
+                    onChange={(e) => setPublicPaciente({ ...publicPaciente, nombre: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Apellido *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej. Gómez"
+                    value={publicPaciente.apellido}
+                    onChange={(e) => setPublicPaciente({ ...publicPaciente, apellido: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="form-group">
+                  <label className="form-label">DNI / Documento *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Sin puntos"
+                    value={publicPaciente.dni}
+                    onChange={(e) => setPublicPaciente({ ...publicPaciente, dni: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Fecha Nac. *</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={publicPaciente.fecha_nacimiento}
+                    onChange={(e) => setPublicPaciente({ ...publicPaciente, fecha_nacimiento: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="form-group">
+                  <label className="form-label">Teléfono / WhatsApp</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej. 1123456789"
+                    value={publicPaciente.telefono}
+                    onChange={(e) => setPublicPaciente({ ...publicPaciente, telefono: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    placeholder="tu@email.com"
+                    value={publicPaciente.email}
+                    onChange={(e) => setPublicPaciente({ ...publicPaciente, email: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="form-group">
+                  <label className="form-label">Obra Social / Cobertura</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej. OSDE, Particular"
+                    value={publicPaciente.obra_social}
+                    onChange={(e) => setPublicPaciente({ ...publicPaciente, obra_social: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">N° Afiliado</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Opcional"
+                    value={publicPaciente.numero_afiliado}
+                    onChange={(e) => setPublicPaciente({ ...publicPaciente, numero_afiliado: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Motivo de Consulta / Antecedentes</label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  placeholder="Ej. Chequeo anual, dolor de garganta..."
+                  value={publicPaciente.notas_generales}
+                  onChange={(e) => setPublicPaciente({ ...publicPaciente, notas_generales: e.target.value })}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem" }} disabled={publicSubmitting}>
+                {publicSubmitting ? "Registrando..." : "✅ Confirmar Registro"}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // --- Pantalla de verificación / login ---
   if (appState === "checking") {
     return (
@@ -1565,7 +1796,7 @@ function App() {
                 <h2 style={{ marginBottom: "1.5rem" }}>Directorio de Historias Clínicas</h2>
                 
                 {/* Caja de Búsqueda */}
-                <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
+                <div className="search-bar-header" style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
                   <input
                     type="text"
                     className="form-input"
@@ -1574,6 +1805,9 @@ function App() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
+                  <button className="btn btn-secondary" onClick={handleTriggerPrintQrPoster} style={{ borderColor: "rgba(16, 185, 129, 0.4)", color: "#10b981" }}>
+                    📱 Cartel QR Puerta
+                  </button>
                   <button className="btn btn-primary" onClick={() => setActiveTab("nuevo-paciente")}>
                     + Nuevo Paciente
                   </button>
@@ -2649,6 +2883,50 @@ function App() {
                   </form>
                 </div>
 
+                {/* 📱 Código QR para la Puerta del Consultorio */}
+                <div className="card">
+                  <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>📱 Código QR para Puerta de Consultorio</h3>
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1.25rem", lineHeight: 1.4 }}>
+                    Imprimí este código QR y colócalo en la puerta o recepción del consultorio. Los pacientes podrán escanearlo con su celular para registrarse automáticamente antes de ingresar a la sala de espera.
+                  </p>
+
+                  <div style={{ textAlign: "center", marginBottom: "1.25rem", background: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px dashed var(--border-color)" }}>
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrBaseUrl)}`}
+                      alt="Código QR de Registro"
+                      style={{ width: "180px", height: "180px", borderRadius: "8px", border: "4px solid #ffffff", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}
+                    />
+                    <div style={{ marginTop: "0.75rem", fontSize: "0.8rem", color: "var(--text-muted)", wordBreak: "break-all" }}>
+                      URL del QR: <code>{qrBaseUrl}</code>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSaveQrUrl} style={{ marginBottom: "1rem" }}>
+                    <div className="form-group">
+                      <label className="form-label">URL del Formulario de Registro</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={qrBaseUrl}
+                        onChange={(e) => setQrBaseUrl(e.target.value)}
+                        placeholder="http://tu-dominio.com/?modo=autoregistro"
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-secondary" style={{ width: "100%", marginBottom: "0.75rem" }}>
+                      💾 Guardar Nueva URL
+                    </button>
+                  </form>
+
+                  <button 
+                    type="button" 
+                    className="btn btn-primary" 
+                    style={{ width: "100%", background: "linear-gradient(135deg, #10b981, #059669)", borderColor: "#059669" }}
+                    onClick={handleTriggerPrintQrPoster}
+                  >
+                    🖨️ Imprimir Cartel A4 para la Puerta
+                  </button>
+                </div>
+
               </div>{/* fin columna derecha */}
             </div>
           </div>
@@ -2968,6 +3246,36 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* --- Cartel A4 Imprimible con Código QR para la Puerta del Consultorio --- */}
+      <div className="print-qr-poster-only">
+        <div className="qr-poster-box">
+          <div className="qr-poster-header-title">{configuracion.doctor_nombre || currentUsuario?.nombre || "Consultorio Médico"}</div>
+          {configuracion.doctor_especialidad && <div className="qr-poster-header-sub">{configuracion.doctor_especialidad}</div>}
+          {configuracion.doctor_matricula && <div className="qr-poster-header-mat">Matrícula Profesional: {configuracion.doctor_matricula}</div>}
+
+          <div className="qr-poster-badge">📱 AUTO-REGISTRO DE PACIENTES</div>
+
+          <div className="qr-poster-instruction">
+            Escaneá este código QR con la cámara de tu celular para registrarte e ingresar a la sala de espera.
+          </div>
+
+          <img 
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrBaseUrl)}`}
+            alt="Código QR de Registro" 
+            className="qr-poster-img"
+          />
+
+          <div className="qr-poster-steps">
+            <div className="qr-poster-step-item">1. Abrí la cámara del celular</div>
+            <div className="qr-poster-step-item">2. Apuntá a este código QR</div>
+            <div className="qr-poster-step-item">3. Completá tu ficha médica</div>
+          </div>
+        </div>
+        <div className="qr-poster-footer-text">
+          History-Ar • Sistema de Gestión de Historias Clínicas y Turnos
+        </div>
+      </div>
     </div>
   );
 }

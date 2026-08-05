@@ -485,3 +485,172 @@ body {
   object-fit: contain;
   mix-blend-mode: multiply; /* Fusiona firmas con fondo blanco */
 }
+
+/* --- Estilos para la Vista Pública de Auto-Registro en Celulares --- */
+.public-register-bg {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.public-register-card {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+  padding: 2.25rem 1.75rem;
+  width: 100%;
+  max-width: 480px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.public-register-header {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+
+.public-register-header h1 {
+  font-size: 1.4rem;
+  color: #0f172a;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+}
+
+.public-register-header p {
+  font-size: 0.88rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.public-success-card {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.public-success-icon {
+  width: 72px;
+  height: 72px;
+  background: #dcfce7;
+  color: #16a34a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  margin: 0 auto 1.25rem auto;
+}
+
+/* --- Cartel A4 Imprimible con Código QR para la Puerta del Consultorio --- */
+.print-qr-poster-only {
+  display: none;
+}
+
+@media print {
+  body.printing-qr-poster * {
+    visibility: hidden !important;
+  }
+
+  body.printing-qr-poster .print-qr-poster-only,
+  body.printing-qr-poster .print-qr-poster-only * {
+    visibility: visible !important;
+  }
+
+  body.printing-qr-poster .print-qr-poster-only {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 2.5cm 2cm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    font-family: 'Inter', sans-serif !important;
+  }
+
+  .qr-poster-box {
+    width: 100%;
+    text-align: center;
+    border: 3px solid #0f172a;
+    border-radius: 24px;
+    padding: 2.5rem 2rem;
+    box-sizing: border-box;
+  }
+
+  .qr-poster-header-title {
+    font-size: 24pt;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 0.3rem;
+  }
+
+  .qr-poster-header-sub {
+    font-size: 14pt;
+    color: #475569;
+    margin-bottom: 0.3rem;
+  }
+
+  .qr-poster-header-mat {
+    font-size: 11pt;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 2rem;
+  }
+
+  .qr-poster-badge {
+    background-color: #0f172a;
+    color: #ffffff;
+    font-size: 16pt;
+    font-weight: 700;
+    padding: 0.6rem 1.5rem;
+    border-radius: 50px;
+    display: inline-block;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.5px;
+  }
+
+  .qr-poster-instruction {
+    font-size: 14pt;
+    color: #334155;
+    line-height: 1.5;
+    max-width: 80%;
+    margin: 0 auto 2rem auto;
+  }
+
+  .qr-poster-img {
+    width: 260px;
+    height: 260px;
+    margin: 0 auto 2rem auto;
+    border: 8px solid #f1f5f9;
+    border-radius: 16px;
+    padding: 8px;
+  }
+
+  .qr-poster-steps {
+    display: flex;
+    justify-content: space-around;
+    border-top: 2px dashed #cbd5e1;
+    padding-top: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .qr-poster-step-item {
+    font-size: 11pt;
+    color: #1e293b;
+    font-weight: 600;
+  }
+
+  .qr-poster-footer-text {
+    font-size: 10pt;
+    color: #94a3b8;
+    margin-top: 2rem;
+  }
+}
