@@ -130,8 +130,6 @@ function App() {
 
   const [restoring, setRestoring] = useState(false);
 
-  const [restoring, setRestoring] = useState(false);
-
   // --- Estados de Autenticación en la Nube (Supabase) ---
   const [appState, setAppState] = useState<"checking" | "login" | "ready">("checking");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -150,7 +148,6 @@ function App() {
 
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // --- Estados del formulario de cambio de contraseña (en Configuración) ---
   const [passwordForm, setPasswordForm] = useState({
