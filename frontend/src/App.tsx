@@ -1338,35 +1338,67 @@ function App() {
         {/* Card de Usuario en Sesión */}
         {currentUsuario && (
           <div style={{
-            margin: "0.5rem 1rem 1rem",
-            padding: "0.75rem",
-            background: "rgba(255, 255, 255, 0.1)",
-            borderRadius: "10px",
-            fontSize: "0.82rem",
-            color: "#ffffff"
+            margin: "0 0 1.25rem 0",
+            padding: "0.9rem 1rem",
+            background: "linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%)",
+            border: "1px solid #ccfbf1",
+            borderRadius: "12px",
+            boxShadow: "0 4px 12px rgba(13, 148, 136, 0.08)"
           }}>
-            <div style={{ fontWeight: "600", fontSize: "0.9rem" }}>
-              👨‍⚕️ {currentUsuario.nombre}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <span style={{ fontSize: "1.2rem" }}>👨‍⚕️</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#0f172a", lineHeight: "1.2" }}>
+                  {currentUsuario.nombre}
+                </div>
+                {currentUsuario.especialidad ? (
+                  <div style={{ fontSize: "0.75rem", color: "#0f766e", fontWeight: 500 }}>
+                    {currentUsuario.especialidad}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "0.75rem", color: "#0f766e", fontWeight: 500 }}>
+                    Médico Conectado
+                  </div>
+                )}
+              </div>
             </div>
-            {currentUsuario.especialidad && (
-              <div style={{ opacity: 0.85, fontSize: "0.78rem" }}>{currentUsuario.especialidad}</div>
-            )}
-            <div style={{ opacity: 0.8, fontSize: "0.75rem", marginTop: "2px" }}>
-              Matrícula: <strong>{currentUsuario.matricula}</strong>
+
+            <div style={{
+              marginTop: "8px",
+              padding: "4px 8px",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              borderRadius: "6px",
+              fontSize: "0.78rem",
+              color: "#334155",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <span>Matrícula:</span>
+              <strong style={{ color: "#0f172a", fontFamily: "monospace", fontSize: "0.82rem" }}>
+                {currentUsuario.matricula}
+              </strong>
             </div>
+
             <button
               onClick={handleLogout}
               style={{
-                marginTop: "0.5rem",
+                marginTop: "10px",
                 width: "100%",
-                padding: "0.3rem",
-                background: "rgba(255, 255, 255, 0.2)",
-                border: "none",
+                padding: "6px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
                 borderRadius: "6px",
-                color: "#ffffff",
-                fontSize: "0.75rem",
+                color: "#dc2626",
+                fontSize: "0.78rem",
                 cursor: "pointer",
-                fontWeight: "500"
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                transition: "all 0.2s"
               }}
             >
               🚪 Cerrar Sesión
