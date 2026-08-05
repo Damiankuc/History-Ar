@@ -1187,24 +1187,24 @@ function App() {
   // --- Vista Pública de Auto-Registro en Celulares por Código QR ---
   if (isPublicRegisterMode) {
     return (
-      <div className="public-register-bg">
-        <div className="public-register-card">
-          <div className="public-register-header">
+      <div className="public-register-bg" style={{ minHeight: "100vh", background: "linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2rem 1rem", fontFamily: "'Inter', system-ui, -apple-system, sans-serif", boxSizing: "border-box" }}>
+        <div className="public-register-card" style={{ background: "#ffffff", borderRadius: "24px", boxShadow: "0 25px 50px -12px rgba(15, 23, 42, 0.15)", padding: "2.5rem 2.25rem", width: "95%", maxWidth: "780px", border: "1px solid rgba(203, 213, 225, 0.8)", boxSizing: "border-box", margin: "0 auto", overflow: "hidden" }}>
+          <div className="public-register-header" style={{ textAlign: "center", marginBottom: "1.75rem" }}>
             <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🏥</div>
-            <h1>{configuracion.doctor_nombre || currentUsuario?.nombre || "Consultorio Médico"}</h1>
-            <p>Registro de Pacientes para Ingreso a Sala de Espera</p>
+            <h1 style={{ fontSize: "1.5rem", color: "#0f172a", marginBottom: "0.4rem", fontWeight: 700 }}>{configuracion.doctor_nombre || currentUsuario?.nombre || "Consultorio Médico"}</h1>
+            <p style={{ fontSize: "0.92rem", color: "#64748b", lineHeight: 1.4 }}>Registro de Pacientes para Ingreso a Sala de Espera</p>
           </div>
 
           {publicSuccess ? (
-            <div className="public-success-card">
-              <div className="public-success-icon">✓</div>
+            <div className="public-success-card" style={{ textAlign: "center", padding: "1rem 0" }}>
+              <div className="public-success-icon" style={{ width: "72px", height: "72px", background: "#dcfce7", color: "#16a34a", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.5rem", margin: "0 auto 1.25rem auto" }}>✓</div>
               <h2 style={{ fontSize: "1.25rem", color: "#15803d", marginBottom: "0.5rem", fontWeight: 700 }}>¡Registro Completado con Éxito!</h2>
               <p style={{ fontSize: "0.9rem", color: "#475569", lineHeight: 1.5, marginBottom: "1.5rem" }}>
                 Tus datos fueron registrados correctamente en el sistema del consultorio. Por favor tomá asiento en la sala de espera, el profesional te llamará a la brevedad.
               </p>
               <button 
                 className="btn btn-secondary" 
-                style={{ width: "100%" }}
+                style={{ width: "100%", padding: "0.8rem", borderRadius: "10px", border: "1px solid #cbd5e1", background: "#f8fafc", color: "#334155", fontWeight: 600, cursor: "pointer" }}
                 onClick={() => {
                   setPublicPaciente({
                     nombre: "", apellido: "", dni: "", fecha_nacimiento: "",
@@ -1226,23 +1226,23 @@ function App() {
                 </div>
               )}
 
-              <div className="public-form-row">
-                <div className="form-group">
-                  <label className="form-label">Nombre *</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
+                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Nombre *</label>
                   <input
                     type="text"
-                    className="form-input"
+                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
                     placeholder="Ej. María"
                     value={publicPaciente.nombre}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, nombre: e.target.value })}
                     required
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Apellido *</label>
+                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
+                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Apellido *</label>
                   <input
                     type="text"
-                    className="form-input"
+                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
                     placeholder="Ej. Gómez"
                     value={publicPaciente.apellido}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, apellido: e.target.value })}
@@ -1251,23 +1251,23 @@ function App() {
                 </div>
               </div>
 
-              <div className="public-form-row">
-                <div className="form-group">
-                  <label className="form-label">DNI / Documento *</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
+                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>DNI / Documento *</label>
                   <input
                     type="text"
-                    className="form-input"
+                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
                     placeholder="Sin puntos"
                     value={publicPaciente.dni}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, dni: e.target.value })}
                     required
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Fecha Nac. *</label>
+                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
+                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Fecha Nac. *</label>
                   <input
                     type="date"
-                    className="form-input"
+                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
                     value={publicPaciente.fecha_nacimiento}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, fecha_nacimiento: e.target.value })}
                     required
@@ -1275,22 +1275,22 @@ function App() {
                 </div>
               </div>
 
-              <div className="public-form-row">
-                <div className="form-group">
-                  <label className="form-label">Teléfono / WhatsApp</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
+                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Teléfono / WhatsApp</label>
                   <input
                     type="text"
-                    className="form-input"
+                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
                     placeholder="Ej. 1123456789"
                     value={publicPaciente.telefono}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, telefono: e.target.value })}
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Email</label>
+                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
+                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Email</label>
                   <input
                     type="email"
-                    className="form-input"
+                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
                     placeholder="tu@email.com"
                     value={publicPaciente.email}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, email: e.target.value })}
@@ -1298,22 +1298,22 @@ function App() {
                 </div>
               </div>
 
-              <div className="public-form-row">
-                <div className="form-group">
-                  <label className="form-label">Obra Social / Cobertura</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", width: "100%", marginBottom: "1rem", boxSizing: "border-box" }}>
+                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
+                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Obra Social / Cobertura</label>
                   <input
                     type="text"
-                    className="form-input"
+                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
                     placeholder="Ej. OSDE, Particular"
                     value={publicPaciente.obra_social}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, obra_social: e.target.value })}
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">N° Afiliado</label>
+                <div style={{ flex: "1 1 240px", minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.35rem", boxSizing: "border-box" }}>
+                  <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>N° Afiliado</label>
                   <input
                     type="text"
-                    className="form-input"
+                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none" }}
                     placeholder="Opcional"
                     value={publicPaciente.numero_afiliado}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, numero_afiliado: e.target.value })}
@@ -1321,18 +1321,22 @@ function App() {
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Motivo de Consulta / Antecedentes</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1.25rem", boxSizing: "border-box" }}>
+                <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "#334155" }}>Motivo de Consulta / Antecedentes</label>
                 <textarea
-                  className="form-input"
                   rows={2}
+                  style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "#f1f5f9", color: "#0f172a", border: "1.5px solid #cbd5e1", borderRadius: "12px", padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none", resize: "vertical" }}
                   placeholder="Ej. Chequeo anual, dolor de garganta..."
                   value={publicPaciente.notas_generales}
                   onChange={(e) => setPublicPaciente({ ...publicPaciente, notas_generales: e.target.value })}
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem" }} disabled={publicSubmitting}>
+              <button 
+                type="submit" 
+                style={{ width: "100%", background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)", color: "#ffffff", fontWeight: 700, fontSize: "1.05rem", borderRadius: "14px", padding: "0.9rem 1.5rem", border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(2, 132, 199, 0.3)", marginTop: "0.5rem" }} 
+                disabled={publicSubmitting}
+              >
                 {publicSubmitting ? "Registrando..." : "✅ Confirmar Registro"}
               </button>
             </form>
