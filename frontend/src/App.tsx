@@ -1346,7 +1346,19 @@ function App() {
             boxShadow: "0 4px 12px rgba(13, 148, 136, 0.08)"
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-              <span style={{ fontSize: "1.2rem" }}>👨‍⚕️</span>
+              <div style={{
+                width: "24px",
+                height: "24px",
+                borderRadius: "6px",
+                background: "#dc2626",
+                color: "#ffffff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: "900",
+                fontSize: "1.05rem",
+                boxShadow: "0 2px 6px rgba(220, 38, 38, 0.3)"
+              }}>✚</div>
               <div>
                 <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#0f172a", lineHeight: "1.2" }}>
                   {currentUsuario.nombre}
