@@ -1,265 +1,317 @@
-from typing import List, Optional
-from sqlmodel import Session, select, or_
-from models import Paciente, Consulta, Documento, Configuracion, Receta, Cita
-from schemas import PacienteCreate, PacienteBase, ConsultaCreate, ConfiguracionUpdate, RecetaCreate, CitaCreate
-
-# --- CRUD Pacientes ---
-
-def get_pacientes(db: Session, skip: int = 0, limit: int = 100, q: Optional[str] = None) -> List[Paciente]:
-    statement = select(Paciente)
-    if q:
-        # Búsqueda por nombre, apellido o DNI
-        search_filter = or_(
-            Paciente.nombre.contains(q),
-            Paciente.apellido.contains(q),
-            Paciente.dni.contains(q)
-        )
-        statement = statement.where(search_filter)
-    
-    # Ordenar por apellido y nombre
-    statement = statement.order_by(Paciente.apellido, Paciente.nombre).offset(skip).limit(limit)
-    return db.exec(statement).all()
-
-def get_paciente(db: Session, paciente_id: int) -> Optional[Paciente]:
-    return db.get(Paciente, paciente_id)
-
-def get_paciente_by_dni(db: Session, dni: str) -> Optional[Paciente]:
-    statement = select(Paciente).where(Paciente.dni == dni)
-    return db.exec(statement).first()
-
-def create_paciente(db: Session, paciente_in: PacienteCreate) -> Paciente:
-    db_paciente = Paciente.model_validate(paciente_in)
-    db.add(db_paciente)
-    db.commit()
-    db.refresh(db_paciente)
-    return db_paciente
-
-def update_paciente(db: Session, paciente_id: int, paciente_update: PacienteCreate) -> Optional[Paciente]:
-    db_paciente = db.get(Paciente, paciente_id)
-    if not db_paciente:
-        return None
-    
-    # Actualizar campos
-    paciente_data = paciente_update.model_dump(exclude_unset=True)
-    for key, value in paciente_data.items():
-        setattr(db_paciente, key, value)
-        
-    db.add(db_paciente)
-    db.commit()
-    db.refresh(db_paciente)
-    return db_paciente
-
-def delete_paciente(db: Session, paciente_id: int) -> bool:
-    db_paciente = db.get(Paciente, paciente_id)
-    if not db_paciente:
-        return False
-    db.delete(db_paciente)
-    db.commit()
-    return True
-
-# --- CRUD Consultas (Historias Clínicas) ---
-
-def create_consulta(db: Session, consulta_in: ConsultaCreate) -> Consulta:
-    db_consulta = Consulta.model_validate(consulta_in)
-    db.add(db_consulta)
-    db.commit()
-    db.refresh(db_consulta)
-    return db_consulta
-
-def get_consulta(db: Session, consulta_id: int) -> Optional[Consulta]:
-    return db.get(Consulta, consulta_id)
-
-def get_consultas_por_paciente(db: Session, paciente_id: int) -> List[Consulta]:
-    statement = select(Consulta).where(Consulta.paciente_id == paciente_id).order_by(Consulta.fecha.desc())
-    return db.exec(statement).all()
-
-# --- CRUD Documentos ---
-
-def create_documento(db: Session, nombre: str, ruta_archivo: str, tipo_mimetype: str, paciente_id: int, consulta_id: Optional[int] = None) -> Documento:
-    db_documento = Documento(
-        nombre=nombre,
-        ruta_archivo=ruta_archivo,
-        tipo_mimetype=tipo_mimetype,
-        paciente_id=paciente_id,
-        consulta_id=consulta_id
-    )
-    db.add(db_documento)
-    db.commit()
-    db.refresh(db_documento)
-    return db_documento
-
-def get_documento(db: Session, documento_id: int) -> Optional[Documento]:
-    return db.get(Documento, documento_id)
-
-def get_documentos_por_paciente(db: Session, paciente_id: int) -> List[Documento]:
-    statement = select(Documento).where(Documento.paciente_id == paciente_id).order_by(Documento.fecha_subida.desc())
-    return db.exec(statement).all()
-
-def delete_documento(db: Session, documento_id: int) -> bool:
-    db_documento = db.get(Documento, documento_id)
-    if not db_documento:
-        return False
-    db.delete(db_documento)
-    db.commit()
-    return True
-
-# --- CRUD Configuración ---
-
-DEFAULT_PASSWORD = "HistoryAR2826"
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+import bcrypt
+from supabase_client import get_supabase
+from schemas import (
+    UsuarioRegister, UsuarioLogin, UsuarioRead,
+    PacienteCreate, PacienteRead, PacienteReadConConsultas,
+    ConsultaCreate, ConsultaRead,
+    DocumentoRead,
+    ConfiguracionRead, ConfiguracionUpdate,
+    RecetaCreate, RecetaRead,
+    CitaCreate, CitaRead, CitaReadConPaciente
+)
 
 def _hash_password(password: str) -> str:
-    import bcrypt
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 def _check_password(password: str, hashed: str) -> bool:
-    import bcrypt
-    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
-
-def get_configuracion(db: Session) -> Configuracion:
-    config = db.get(Configuracion, 1)
-    if not config:
-        # Primera vez: crear con contraseña por defecto hasheada
-        # primer_inicio_completado=False -> el frontend pedirá la contraseña de activación UNA sola vez
-        # pedir_password_al_iniciar=False -> después de esa primera vez, entra directo
-        config = Configuracion(
-            id=1,
-            doctor_nombre="",
-            doctor_especialidad="",
-            doctor_matricula="",
-            password_hash=_hash_password(DEFAULT_PASSWORD),
-            pedir_password_al_iniciar=False,
-            primer_inicio_completado=False
-        )
-        db.add(config)
-        db.commit()
-        db.refresh(config)
-    elif config.password_hash is None:
-        # Migración: si ya existía pero sin contraseña, asignar la contraseña por defecto
-        config.password_hash = _hash_password(DEFAULT_PASSWORD)
-        db.add(config)
-        db.commit()
-        db.refresh(config)
-    return config
-
-def update_configuracion(db: Session, config_in: ConfiguracionUpdate) -> Configuracion:
-    config = get_configuracion(db)
-    update_data = config_in.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(config, key, value)
-    db.add(config)
-    db.commit()
-    db.refresh(config)
-    return config
-
-def update_firma_ruta(db: Session, firma_ruta: str) -> Configuracion:
-    config = get_configuracion(db)
-    config.firma_ruta = firma_ruta
-    db.add(config)
-    db.commit()
-    db.refresh(config)
-    return config
-
-def verificar_password(db: Session, password: str) -> bool:
-    """Verifica si la contraseña provista es correcta."""
-    config = get_configuracion(db)
-    if not config.password_hash:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
         return False
-    return _check_password(password, config.password_hash)
 
-def completar_primer_inicio(db: Session, password: str) -> bool:
-    """Verifica la contraseña de activación. Si es correcta, marca primer_inicio_completado=True
-    y deja pedir_password_al_iniciar=False para que no vuelva a pedir nunca más.
-    Devuelve True si la contraseña fue correcta."""
-    config = get_configuracion(db)
-    if not config.password_hash or not _check_password(password, config.password_hash):
-        return False
-    config.primer_inicio_completado = True
-    config.pedir_password_al_iniciar = False  # nunca más pedir automáticamente
-    db.add(config)
-    db.commit()
-    return True
+# --- CRUD Usuarios (Médicos) en Supabase ---
 
-def cambiar_password(db: Session, password_actual: str, password_nueva: str) -> bool:
-    """Cambia la contraseña si la actual es correcta. Devuelve True si tuvo éxito."""
-    config = get_configuracion(db)
-    if not config.password_hash or not _check_password(password_actual, config.password_hash):
-        return False
-    config.password_hash = _hash_password(password_nueva)
-    db.add(config)
-    db.commit()
-    return True
+def get_usuario_by_matricula(matricula: str) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("usuarios").select("*").eq("matricula", matricula.strip()).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    return None
+
+def register_usuario(usuario_in: UsuarioRegister) -> Dict[str, Any]:
+    supabase = get_supabase()
+    # Verificar si ya existe por matrícula
+    existing = get_usuario_by_matricula(usuario_in.matricula)
+    if existing:
+        raise ValueError(f"Ya existe un usuario registrado con la matrícula '{usuario_in.matricula}'")
+    
+    pass_hash = _hash_password(usuario_in.password) if usuario_in.password else None
+    
+    data = {
+        "nombre": usuario_in.nombre.strip(),
+        "especialidad": (usuario_in.especialidad or "").strip(),
+        "matricula": usuario_in.matricula.strip(),
+        "password_hash": pass_hash
+    }
+    
+    res = supabase.table("usuarios").insert(data).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    raise Exception("No se pudo registrar el usuario en Supabase")
+
+def login_usuario(nombre: str, matricula: str, password: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    matricula_clean = matricula.strip()
+    nombre_clean = nombre.strip().lower()
+    
+    res = supabase.table("usuarios").select("*").eq("matricula", matricula_clean).execute()
+    if not res.data:
+        return None
+        
+    usuario = res.data[0]
+    # Verificar coincidencia parcial o total de nombre (insensible a mayúsculas)
+    if nombre_clean not in usuario["nombre"].lower():
+        return None
+        
+    # Verificar contraseña si el usuario tiene una configurada
+    if usuario.get("password_hash"):
+        if not password or not _check_password(password, usuario["password_hash"]):
+            return None
+            
+    return usuario
+
+# --- CRUD Pacientes ---
+
+def get_pacientes(skip: int = 0, limit: int = 100, q: Optional[str] = None) -> List[Dict[str, Any]]:
+    supabase = get_supabase()
+    query = supabase.table("pacientes").select("*")
+    if q and q.strip():
+        search = f"%{q.strip()}%"
+        query = query.or_(f"nombre.ilike.{search},apellido.ilike.{search},dni.ilike.{search}")
+    
+    query = query.order("apellido").order("nombre").range(skip, skip + limit - 1)
+    res = query.execute()
+    return res.data or []
+
+def get_paciente(paciente_id: int) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("pacientes").select("*").eq("id", paciente_id).execute()
+    if res.data and len(res.data) > 0:
+        paciente = res.data[0]
+        # Cargar relaciones completas (consultas, documentos, recetas, citas)
+        consultas = get_consultas_por_paciente(paciente_id)
+        documentos = get_documentos_por_paciente(paciente_id)
+        recetas = get_recetas_por_paciente(paciente_id)
+        citas = supabase.table("citas").select("*").eq("paciente_id", paciente_id).execute().data or []
+        
+        paciente["consultas"] = consultas
+        paciente["documentos"] = documentos
+        paciente["recetas"] = recetas
+        paciente["citas"] = citas
+        return paciente
+    return None
+
+def get_paciente_by_dni(dni: str) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("pacientes").select("*").eq("dni", dni.strip()).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    return None
+
+def create_paciente(paciente_in: PacienteCreate) -> Dict[str, Any]:
+    supabase = get_supabase()
+    data = paciente_in.model_dump(exclude_unset=True)
+    res = supabase.table("pacientes").insert(data).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    raise Exception("No se pudo crear el paciente en Supabase")
+
+def update_paciente(paciente_id: int, paciente_update: PacienteCreate) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    data = paciente_update.model_dump(exclude_unset=True)
+    res = supabase.table("pacientes").update(data).eq("id", paciente_id).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    return None
+
+def delete_paciente(paciente_id: int) -> bool:
+    supabase = get_supabase()
+    res = supabase.table("pacientes").delete().eq("id", paciente_id).execute()
+    return bool(res.data)
+
+# --- CRUD Consultas (Historias Médicas / Padecimientos) ---
+
+def create_consulta(consulta_in: ConsultaCreate) -> Dict[str, Any]:
+    supabase = get_supabase()
+    data = consulta_in.model_dump(exclude_unset=True)
+    res = supabase.table("consultas").insert(data).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    raise Exception("No se pudo registrar la consulta médica")
+
+def get_consulta(consulta_id: int) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("consultas").select("*").eq("id", consulta_id).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    return None
+
+def get_consultas_por_paciente(paciente_id: int) -> List[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("consultas").select("*").eq("paciente_id", paciente_id).order("fecha", desc=True).execute()
+    return res.data or []
+
+# --- CRUD Documentos ---
+
+def create_documento(nombre: str, ruta_archivo: str, tipo_mimetype: str, paciente_id: int, consulta_id: Optional[int] = None) -> Dict[str, Any]:
+    supabase = get_supabase()
+    data = {
+        "nombre": nombre,
+        "ruta_archivo": ruta_archivo,
+        "tipo_mimetype": tipo_mimetype,
+        "paciente_id": paciente_id,
+        "consulta_id": consulta_id
+    }
+    res = supabase.table("documentos").insert(data).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    raise Exception("No se pudo crear el registro de documento en Supabase")
+
+def get_documento(documento_id: int) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("documentos").select("*").eq("id", documento_id).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    return None
+
+def get_documentos_por_paciente(paciente_id: int) -> List[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("documentos").select("*").eq("paciente_id", paciente_id).order("fecha_subida", desc=True).execute()
+    return res.data or []
+
+def delete_documento(documento_id: int) -> bool:
+    supabase = get_supabase()
+    res = supabase.table("documentos").delete().eq("id", documento_id).execute()
+    return bool(res.data)
 
 # --- CRUD Recetas ---
 
-def create_receta(db: Session, receta_in: RecetaCreate) -> Receta:
-    db_receta = Receta.model_validate(receta_in)
-    db.add(db_receta)
-    db.commit()
-    db.refresh(db_receta)
-    return db_receta
+def create_receta(receta_in: RecetaCreate) -> Dict[str, Any]:
+    supabase = get_supabase()
+    data = receta_in.model_dump(exclude_unset=True)
+    res = supabase.table("recetas").insert(data).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    raise Exception("No se pudo crear la receta")
 
-def get_receta(db: Session, receta_id: int) -> Optional[Receta]:
-    return db.get(Receta, receta_id)
+def get_receta(receta_id: int) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("recetas").select("*").eq("id", receta_id).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    return None
 
-def get_recetas_por_paciente(db: Session, paciente_id: int) -> List[Receta]:
-    statement = select(Receta).where(Receta.paciente_id == paciente_id).order_by(Receta.fecha.desc())
-    return db.exec(statement).all()
+def get_recetas_por_paciente(paciente_id: int) -> List[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("recetas").select("*").eq("paciente_id", paciente_id).order("fecha", desc=True).execute()
+    return res.data or []
 
-def delete_receta(db: Session, receta_id: int) -> bool:
-    db_receta = db.get(Receta, receta_id)
-    if not db_receta:
-        return False
-    db.delete(db_receta)
-    db.commit()
-    return True
+def delete_receta(receta_id: int) -> bool:
+    supabase = get_supabase()
+    res = supabase.table("recetas").delete().eq("id", receta_id).execute()
+    return bool(res.data)
 
 # --- CRUD Citas ---
 
-def create_cita(db: Session, cita_in: CitaCreate) -> Cita:
-    db_cita = Cita.model_validate(cita_in)
-    db.add(db_cita)
-    db.commit()
-    db.refresh(db_cita)
-    return db_cita
+def create_cita(cita_in: CitaCreate) -> Dict[str, Any]:
+    supabase = get_supabase()
+    data = cita_in.model_dump(exclude_unset=True)
+    if "fecha_hora" in data and isinstance(data["fecha_hora"], datetime):
+        data["fecha_hora"] = data["fecha_hora"].isoformat()
+    res = supabase.table("citas").insert(data).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    raise Exception("No se pudo agendar la cita")
 
-def get_cita(db: Session, cita_id: int) -> Optional[Cita]:
-    return db.get(Cita, cita_id)
+def get_cita(cita_id: int) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("citas").select("*").eq("id", cita_id).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    return None
 
-def get_citas(db: Session) -> List[Cita]:
-    statement = select(Cita).order_by(Cita.fecha_hora.asc())
-    return db.exec(statement).all()
+def get_citas() -> List[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("citas").select("*, paciente:paciente_id(id, nombre, apellido, dni)").order("fecha_hora").execute()
+    return res.data or []
 
-def update_cita_estado(db: Session, cita_id: int, estado: str) -> Optional[Cita]:
-    db_cita = db.get(Cita, cita_id)
-    if not db_cita:
-        return None
-    db_cita.estado = estado
-    db.add(db_cita)
-    db.commit()
-    db.refresh(db_cita)
-    return db_cita
+def update_cita_estado(cita_id: int, estado: str) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase()
+    res = supabase.table("citas").update({"estado": estado}).eq("id", cita_id).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
+    return None
 
-def delete_cita(db: Session, cita_id: int) -> bool:
-    db_cita = db.get(Cita, cita_id)
-    if not db_cita:
-        return False
-    db.delete(db_cita)
-    db.commit()
-    return True
+def delete_cita(cita_id: int) -> bool:
+    supabase = get_supabase()
+    res = supabase.table("citas").delete().eq("id", cita_id).execute()
+    return bool(res.data)
 
-def delete_paciente(db: Session, paciente_id: int) -> bool:
-    import os
-    paciente = db.get(Paciente, paciente_id)
-    if paciente:
-        for doc in paciente.documentos:
-            relative_path = doc.ruta_archivo.lstrip("/")
-            file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), relative_path)
-            if os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                except Exception:
-                    pass
-        db.delete(paciente)
-        db.commit()
-        return True
-    return False
+# --- Configuración del Médico / Usuario ---
+
+def get_configuracion(usuario_id: Optional[int] = None) -> Dict[str, Any]:
+    supabase = get_supabase()
+    if usuario_id:
+        res = supabase.table("usuarios").select("*").eq("id", usuario_id).execute()
+        if res.data and len(res.data) > 0:
+            u = res.data[0]
+            return {
+                "id": u["id"],
+                "doctor_nombre": u.get("nombre", ""),
+                "doctor_especialidad": u.get("especialidad", ""),
+                "doctor_matricula": u.get("matricula", ""),
+                "firma_ruta": u.get("firma_ruta"),
+                "pedir_password_al_iniciar": True
+            }
+    
+    # Fallback al primer médico registrado
+    res = supabase.table("usuarios").select("*").limit(1).execute()
+    if res.data and len(res.data) > 0:
+        u = res.data[0]
+        return {
+            "id": u["id"],
+            "doctor_nombre": u.get("nombre", ""),
+            "doctor_especialidad": u.get("especialidad", ""),
+            "doctor_matricula": u.get("matricula", ""),
+            "firma_ruta": u.get("firma_ruta"),
+            "pedir_password_al_iniciar": True
+        }
+    
+    return {
+        "id": 0,
+        "doctor_nombre": "",
+        "doctor_especialidad": "",
+        "doctor_matricula": "",
+        "firma_ruta": None,
+        "pedir_password_al_iniciar": False
+    }
+
+def update_configuracion(config_in: ConfiguracionUpdate, usuario_id: Optional[int] = None) -> Dict[str, Any]:
+    supabase = get_supabase()
+    update_data = {}
+    if config_in.doctor_nombre is not None:
+        update_data["nombre"] = config_in.doctor_nombre
+    if config_in.doctor_especialidad is not None:
+        update_data["especialidad"] = config_in.doctor_especialidad
+    if config_in.doctor_matricula is not None:
+        update_data["matricula"] = config_in.doctor_matricula
+        
+    if update_data and usuario_id:
+        res = supabase.table("usuarios").update(update_data).eq("id", usuario_id).execute()
+        if res.data and len(res.data) > 0:
+            return get_configuracion(usuario_id)
+            
+    return get_configuracion(usuario_id)
+
+def update_firma_ruta(firma_ruta: str, usuario_id: Optional[int] = None) -> Dict[str, Any]:
+    supabase = get_supabase()
+    if usuario_id:
+        supabase.table("usuarios").update({"firma_ruta": firma_ruta}).eq("id", usuario_id).execute()
+    else:
+        # Actualizar primer usuario
+        users = supabase.table("usuarios").select("id").limit(1).execute()
+        if users.data:
+            supabase.table("usuarios").update({"firma_ruta": firma_ruta}).eq("id", users.data[0]["id"]).execute()
+    return get_configuracion(usuario_id)
