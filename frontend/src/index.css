@@ -489,24 +489,24 @@ body {
 /* --- Estilos para la Vista Pública de Auto-Registro en Celulares --- */
 .public-register-bg {
   min-height: 100vh;
-  background: linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%);
+  background: linear-gradient(135deg, #eef2f7 0%, #e0f2fe 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem 1rem;
+  padding: 1.5rem 1rem;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   box-sizing: border-box;
 }
 
 .public-register-card {
   background: #ffffff !important;
-  border-radius: 28px !important;
-  box-shadow: 0 30px 60px -12px rgba(15, 23, 42, 0.15), 0 12px 24px -8px rgba(15, 23, 42, 0.06) !important;
-  padding: 3rem 2.5rem !important;
+  border-radius: 20px !important;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.08) !important;
+  padding: 2.25rem 2rem !important;
   width: 95% !important;
-  max-width: 920px !important;
-  border: 1px solid rgba(203, 213, 225, 0.9) !important;
+  max-width: 540px !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
   box-sizing: border-box !important;
   margin: 0 auto !important;
   overflow: hidden !important;
@@ -516,46 +516,21 @@ body {
   box-sizing: border-box !important;
 }
 
-.public-form-row {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 1.25rem !important;
-  width: 100% !important;
-  margin-bottom: 0.25rem !important;
-}
-
-.public-form-row > .form-group {
-  min-width: 0 !important;
-  width: 100% !important;
-  overflow: hidden !important;
-}
-
-@media (max-width: 640px) {
-  .public-register-card {
-    padding: 1.75rem 1.25rem !important;
-    border-radius: 18px !important;
-  }
-
-  .public-form-row {
-    grid-template-columns: 1fr !important;
-    gap: 0.25rem !important;
-  }
-}
-
 .public-register-card .form-group {
-  margin-bottom: 1.1rem !important;
+  margin-bottom: 0.85rem !important;
   width: 100% !important;
   min-width: 0 !important;
   display: flex !important;
   flex-direction: column !important;
+  overflow: hidden !important;
 }
 
 .public-register-card .form-label {
   display: block !important;
-  font-size: 0.88rem !important;
+  font-size: 0.85rem !important;
   font-weight: 600 !important;
-  color: #334155 !important;
-  margin-bottom: 0.4rem !important;
+  color: #64748b !important;
+  margin-bottom: 0.35rem !important;
 }
 
 .public-register-card input.form-input,
@@ -564,15 +539,36 @@ body {
   width: 100% !important;
   min-width: 0 !important;
   max-width: 100% !important;
-  background-color: #f1f5f9 !important;
-  color: #0f172a !important;
-  border: 1.5px solid #cbd5e1 !important;
-  border-radius: 12px !important;
-  padding: 0.75rem 1rem !important;
-  font-size: 0.95rem !important;
+  background-color: #0e1726 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 0.75rem 0.9rem !important;
+  font-size: 0.9rem !important;
   font-family: inherit !important;
   box-sizing: border-box !important;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease !important;
+  outline: none !important;
+}
+
+.public-register-card input.form-input::placeholder,
+.public-register-card textarea.form-input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+.public-register-card .btn-primary {
+  width: 100% !important;
+  background: #00b8d4 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  border-radius: 10px !important;
+  padding: 0.85rem 1.5rem !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(0, 184, 212, 0.3) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  margin-top: 0.25rem !important;
 }
 
 .public-register-card input.form-input::placeholder,
