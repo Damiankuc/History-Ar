@@ -130,11 +130,24 @@ function App() {
 
   const [restoring, setRestoring] = useState(false);
 
-  // --- Estados de Autenticación ---
-  // "checking": verificando con el backend, "login": mostrar pantalla de login, "ready": app desbloqueada
+  const [restoring, setRestoring] = useState(false);
+
+  // --- Estados de Autenticación en la Nube (Supabase) ---
   const [appState, setAppState] = useState<"checking" | "login" | "ready">("checking");
-  const [isPrimerInicio, setIsPrimerInicio] = useState(false); // true = primera vez (activación)
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [currentUsuario, setCurrentUsuario] = useState<{ id: number; nombre: string; especialidad: string; matricula: string; firma_ruta?: string } | null>(null);
+
+  // Campos Login
+  const [loginNombre, setLoginNombre] = useState("");
+  const [loginMatricula, setLoginMatricula] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+
+  // Campos Registro
+  const [registerNombre, setRegisterNombre] = useState("");
+  const [registerEspecialidad, setRegisterEspecialidad] = useState("");
+  const [registerMatricula, setRegisterMatricula] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -201,32 +214,44 @@ function App() {
 
   const initApp = async () => {
     try {
+      const storedUser = localStorage.getItem("history_ar_user");
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          setCurrentUsuario(parsed);
+          setConfiguracion(prev => ({
+            ...prev,
+            doctor_nombre: parsed.nombre || "",
+            doctor_especialidad: parsed.especialidad || "",
+            doctor_matricula: parsed.matricula || ""
+          }));
+          setAppState("ready");
+          setApiOnline(true);
+          return;
+        } catch {
+          localStorage.removeItem("history_ar_user");
+        }
+      }
+
       const healthRes = await fetch(`${API_BASE_URL}/health`);
       if (!healthRes.ok) {
-        // Backend offline, igual mostrar la app (el banner de API offline se encarga)
         setAppState("ready");
         setApiOnline(false);
         return;
       }
       setApiOnline(true);
-      // Consultar estado de autenticación
+
       const authRes = await fetch(`${API_BASE_URL}/auth/estado`);
       if (authRes.ok) {
         const authData = await authRes.json();
         if (!authData.primer_inicio_completado) {
-          // PRIMERA VEZ: pedir activación (solo esta vez, nunca más)
-          setIsPrimerInicio(true);
-          setAppState("login");
-        } else if (authData.pedir_password_al_iniciar) {
-          // Login opcional habilitado por el doctor en Configuración
-          setIsPrimerInicio(false);
-          setAppState("login");
+          setAuthMode("register");
         } else {
-          // Entrar directo
-          setAppState("ready");
+          setAuthMode("login");
         }
+        setAppState("login");
       } else {
-        setAppState("ready");
+        setAppState("login");
       }
     } catch {
       setApiOnline(false);
@@ -234,35 +259,97 @@ function App() {
     }
   };
 
-  // Handler de Login (primer inicio o login normal)
+  // Handler de Login por Nombre y Número de Matrícula
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginPassword) { setLoginError("Por favor ingresá la contraseña."); return; }
+    if (!loginNombre.trim() || !loginMatricula.trim()) {
+      setLoginError("Por favor ingresá tu nombre y número de matrícula.");
+      return;
+    }
     try {
       setLoginLoading(true);
       setLoginError("");
       const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: loginPassword })
+        body: JSON.stringify({
+          nombre: loginNombre.trim(),
+          matricula: loginMatricula.trim(),
+          password: loginPassword || undefined
+        })
       });
+
       if (res.ok) {
+        const data = await res.json();
+        const user = data.usuario;
+        setCurrentUsuario(user);
+        localStorage.setItem("history_ar_user", JSON.stringify(user));
+        setConfiguracion(prev => ({
+          ...prev,
+          doctor_nombre: user.nombre || "",
+          doctor_especialidad: user.especialidad || "",
+          doctor_matricula: user.matricula || ""
+        }));
         setLoginPassword("");
-        setIsPrimerInicio(false);
         setAppState("ready");
       } else {
         const errData = await res.json().catch(() => ({}));
-        if (isPrimerInicio) {
-          setLoginError("Contraseña de activación incorrecta. Verificá los datos ingresados.");
-        } else {
-          setLoginError(errData.detail || "Contraseña incorrecta. Intentá de nuevo.");
-        }
+        setLoginError(errData.detail || "Datos incorrectos. Verificá tu Nombre y Matrícula.");
       }
     } catch {
-      setLoginError("Error de conexión. Intentá de nuevo.");
+      setLoginError("Error de conexión con la nube Supabase.");
     } finally {
       setLoginLoading(false);
     }
+  };
+
+  // Handler de Registro de Usuario Médico
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!registerNombre.trim() || !registerMatricula.trim()) {
+      setLoginError("Por favor ingresá tu nombre completo y número de matrícula.");
+      return;
+    }
+    try {
+      setLoginLoading(true);
+      setLoginError("");
+      const res = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: registerNombre.trim(),
+          especialidad: registerEspecialidad.trim(),
+          matricula: registerMatricula.trim(),
+          password: registerPassword || undefined
+        })
+      });
+
+      if (res.ok) {
+        const user = await res.json();
+        setCurrentUsuario(user);
+        localStorage.setItem("history_ar_user", JSON.stringify(user));
+        setConfiguracion(prev => ({
+          ...prev,
+          doctor_nombre: user.nombre || "",
+          doctor_especialidad: user.especialidad || "",
+          doctor_matricula: user.matricula || ""
+        }));
+        setAppState("ready");
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setLoginError(errData.detail || "Error al registrar el usuario.");
+      }
+    } catch {
+      setLoginError("Error de conexión al guardar el usuario en Supabase.");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("history_ar_user");
+    setCurrentUsuario(null);
+    setAppState("login");
   };
 
   // Handler de Cambio de Contraseña (desde Configuración)
@@ -949,11 +1036,11 @@ function App() {
           borderRadius: "16px",
           padding: "2.5rem 2rem",
           width: "100%",
-          maxWidth: "380px",
+          maxWidth: "420px",
           boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01)"
         }}>
           {/* Logo y Encabezado */}
-          <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
             <div style={{
               width: "56px",
               height: "56px",
@@ -968,73 +1055,121 @@ function App() {
               margin: "0 auto 1rem",
               boxShadow: "0 4px 12px rgba(0, 128, 128, 0.25)"
             }}>H</div>
-            <h1 style={{ color: "#0f172a", fontSize: "1.4rem", fontWeight: 700, margin: 0 }}>History-Ar</h1>
-            <p style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.25rem" }}>Sistema de Historias Médicas</p>
+            <h1 style={{ color: "#0f172a", fontSize: "1.4rem", fontWeight: 700, margin: 0 }}>History-Ar Cloud</h1>
+            <p style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.25rem" }}>Base de datos en la nube (Supabase)</p>
 
-            {isPrimerInicio && (
-              <div style={{
-                display: "inline-block",
-                marginTop: "0.75rem",
-                padding: "0.25rem 0.75rem",
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
-                borderRadius: "20px",
-                color: "#1d4ed8",
-                fontSize: "0.75rem",
-                fontWeight: 600
-              }}>
-                Activación de primer uso
-              </div>
-            )}
+            {/* Selector de Pestañas Login / Registro */}
+            <div style={{
+              display: "flex",
+              gap: "8px",
+              marginTop: "1.25rem",
+              background: "#f1f5f9",
+              padding: "4px",
+              borderRadius: "8px"
+            }}>
+              <button
+                type="button"
+                onClick={() => { setAuthMode("login"); setLoginError(""); }}
+                style={{
+                  flex: 1,
+                  padding: "6px 12px",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: authMode === "login" ? "#ffffff" : "transparent",
+                  color: authMode === "login" ? "var(--primary, #008080)" : "#64748b",
+                  boxShadow: authMode === "login" ? "0 1px 3px rgba(0,0,0,0.1)" : "none"
+                }}
+              >
+                Iniciar Sesión
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode("register"); setLoginError(""); }}
+                style={{
+                  flex: 1,
+                  padding: "6px 12px",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: authMode === "register" ? "#ffffff" : "transparent",
+                  color: authMode === "register" ? "var(--primary, #008080)" : "#64748b",
+                  boxShadow: authMode === "register" ? "0 1px 3px rgba(0,0,0,0.1)" : "none"
+                }}
+              >
+                Registrar Usuario
+              </button>
+            </div>
           </div>
 
-          {/* Formulario */}
-          <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", color: "#334155", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem" }}>
-                {isPrimerInicio ? "Contraseña de activación" : "Contraseña de acceso"}
-              </label>
-              <div style={{ position: "relative" }}>
+          {/* Formulario de Login */}
+          {authMode === "login" ? (
+            <form onSubmit={handleLogin}>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ display: "block", color: "#334155", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                  Nombre del Médico / Usuario
+                </label>
                 <input
-                  id="login-password"
-                  type={showLoginPassword ? "text" : "password"}
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="Ingresá la contraseña..."
+                  type="text"
+                  value={loginNombre}
+                  onChange={(e) => setLoginNombre(e.target.value)}
+                  placeholder="ej. Dr. Juan Pérez"
                   autoFocus
                   style={{
                     width: "100%",
-                    padding: "0.75rem 4.2rem 0.75rem 0.85rem",
-                    background: "#ffffff",
-                    border: `1px solid ${loginError ? "#fca5a5" : "#cbd5e1"}`,
+                    padding: "0.75rem 0.85rem",
+                    border: "1px solid #cbd5e1",
                     borderRadius: "8px",
-                    color: "#0f172a",
                     fontSize: "0.95rem",
-                    outline: "none",
-                    boxSizing: "border-box",
-                    transition: "border-color 0.2s"
+                    boxSizing: "border-box"
                   }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowLoginPassword(v => !v)}
-                  style={{
-                    position: "absolute",
-                    right: "0.6rem",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "#64748b",
-                    fontSize: "0.78rem",
-                    fontWeight: 500,
-                    padding: "0.25rem 0.4rem"
-                  }}
-                >
-                  {showLoginPassword ? "Ocultar" : "Mostrar"}
-                </button>
               </div>
+
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ display: "block", color: "#334155", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                  Número de Matrícula
+                </label>
+                <input
+                  type="text"
+                  value={loginMatricula}
+                  onChange={(e) => setLoginMatricula(e.target.value)}
+                  placeholder="ej. MP 12345"
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 0.85rem",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    fontSize: "0.95rem",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", color: "#334155", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                  Contraseña (opcional)
+                </label>
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Contraseña (si registraste una)"
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 0.85rem",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    fontSize: "0.95rem",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
               {loginError && (
                 <div style={{
                   color: "#b91c1c",
@@ -1043,37 +1178,151 @@ function App() {
                   borderRadius: "6px",
                   padding: "0.5rem 0.75rem",
                   fontSize: "0.825rem",
-                  marginTop: "0.5rem"
+                  marginBottom: "1rem"
                 }}>
                   {loginError}
                 </div>
               )}
-            </div>
 
-            <button
-              id="btn-login-ingresar"
-              type="submit"
-              disabled={loginLoading}
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                background: loginLoading ? "#94a3b8" : "var(--primary, #008080)",
-                border: "none",
-                borderRadius: "8px",
-                color: "#ffffff",
-                fontWeight: 600,
-                fontSize: "0.95rem",
-                cursor: loginLoading ? "not-allowed" : "pointer",
-                transition: "background-color 0.2s",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
-              }}
-            >
-              {loginLoading ? "Verificando..." : (isPrimerInicio ? "Activar e ingresar" : "Ingresar")}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loginLoading}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  background: loginLoading ? "#94a3b8" : "var(--primary, #008080)",
+                  border: "none",
+                  borderRadius: "8px",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  fontSize: "0.95rem",
+                  cursor: loginLoading ? "not-allowed" : "pointer"
+                }}
+              >
+                {loginLoading ? "Verificando en Supabase..." : "Iniciar Sesión"}
+              </button>
+            </form>
+          ) : (
+            /* Formulario de Registro */
+            <form onSubmit={handleRegister}>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ display: "block", color: "#334155", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                  Nombre Completo *
+                </label>
+                <input
+                  type="text"
+                  value={registerNombre}
+                  onChange={(e) => setRegisterNombre(e.target.value)}
+                  placeholder="ej. Dr. Carlos Rossi"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 0.85rem",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    fontSize: "0.95rem",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
 
-          <p style={{ textAlign: "center", color: "#94a3b8", fontSize: "0.78rem", marginTop: "1.75rem", marginBottom: 0 }}>
-            {isPrimerInicio ? "Esta activación solo se requiere una vez al instalar." : "History-Ar — Acceso protegido"}
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ display: "block", color: "#334155", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                  Especialidad Médica
+                </label>
+                <input
+                  type="text"
+                  value={registerEspecialidad}
+                  onChange={(e) => setRegisterEspecialidad(e.target.value)}
+                  placeholder="ej. Medicina General, Pediatría"
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 0.85rem",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    fontSize: "0.95rem",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ display: "block", color: "#334155", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                  Número de Matrícula *
+                </label>
+                <input
+                  type="text"
+                  value={registerMatricula}
+                  onChange={(e) => setRegisterMatricula(e.target.value)}
+                  placeholder="ej. MP 98765"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 0.85rem",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    fontSize: "0.95rem",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", color: "#334155", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                  Contraseña de Seguridad (opcional)
+                </label>
+                <input
+                  type="password"
+                  value={registerPassword}
+                  onChange={(e) => setRegisterPassword(e.target.value)}
+                  placeholder="Contraseña para proteger la cuenta"
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 0.85rem",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    fontSize: "0.95rem",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              {loginError && (
+                <div style={{
+                  color: "#b91c1c",
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  borderRadius: "6px",
+                  padding: "0.5rem 0.75rem",
+                  fontSize: "0.825rem",
+                  marginBottom: "1rem"
+                }}>
+                  {loginError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loginLoading}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  background: loginLoading ? "#94a3b8" : "var(--primary, #008080)",
+                  border: "none",
+                  borderRadius: "8px",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  fontSize: "0.95rem",
+                  cursor: loginLoading ? "not-allowed" : "pointer"
+                }}
+              >
+                {loginLoading ? "Guardando en Supabase..." : "Crear Cuenta y Conectar"}
+              </button>
+            </form>
+          )}
+
+          <p style={{ textAlign: "center", color: "#94a3b8", fontSize: "0.78rem", marginTop: "1.5rem", marginBottom: 0 }}>
+            History-Ar Cloud — Sincronizado con Supabase PostgreSQL
           </p>
         </div>
       </div>
@@ -1088,6 +1337,45 @@ function App() {
           <div className="logo-icon">H</div>
           <span className="logo-text">History-Ar</span>
         </div>
+
+        {/* Card de Usuario en Sesión */}
+        {currentUsuario && (
+          <div style={{
+            margin: "0.5rem 1rem 1rem",
+            padding: "0.75rem",
+            background: "rgba(255, 255, 255, 0.1)",
+            borderRadius: "10px",
+            fontSize: "0.82rem",
+            color: "#ffffff"
+          }}>
+            <div style={{ fontWeight: "600", fontSize: "0.9rem" }}>
+              👨‍⚕️ {currentUsuario.nombre}
+            </div>
+            {currentUsuario.especialidad && (
+              <div style={{ opacity: 0.85, fontSize: "0.78rem" }}>{currentUsuario.especialidad}</div>
+            )}
+            <div style={{ opacity: 0.8, fontSize: "0.75rem", marginTop: "2px" }}>
+              Matrícula: <strong>{currentUsuario.matricula}</strong>
+            </div>
+            <button
+              onClick={handleLogout}
+              style={{
+                marginTop: "0.5rem",
+                width: "100%",
+                padding: "0.3rem",
+                background: "rgba(255, 255, 255, 0.2)",
+                border: "none",
+                borderRadius: "6px",
+                color: "#ffffff",
+                fontSize: "0.75rem",
+                cursor: "pointer",
+                fontWeight: "500"
+              }}
+            >
+              🚪 Cerrar Sesión
+            </button>
+          </div>
+        )}
         
         <nav>
           <ul className="nav-menu">
@@ -1129,11 +1417,11 @@ function App() {
         {/* Indicador de estado de API */}
         <div style={{ marginTop: "auto", padding: "10px", borderRadius: "8px", backgroundColor: apiOnline ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)", border: "1px solid", borderColor: apiOnline ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)" }}>
           <span style={{ fontSize: "0.85rem", fontWeight: 600, color: apiOnline ? "rgb(16, 185, 129)" : "rgb(239, 68, 68)" }}>
-            ● API Local: {apiOnline ? "Conectada" : "Desconectada"}
+            ● Supabase Cloud: {apiOnline ? "Conectada" : "Desconectada"}
           </span>
         </div>
       </aside>
-
+      
       {/* Panel Principal */}
       <main className="main-panel fade-in">
         {apiOnline === false && (
