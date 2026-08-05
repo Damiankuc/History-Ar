@@ -502,13 +502,14 @@ body {
 .public-register-card {
   background: #ffffff !important;
   border-radius: 24px !important;
-  box-shadow: 0 25px 40px -12px rgba(15, 23, 42, 0.12), 0 10px 20px -8px rgba(15, 23, 42, 0.05) !important;
+  box-shadow: 0 25px 45px -12px rgba(15, 23, 42, 0.12), 0 10px 20px -8px rgba(15, 23, 42, 0.05) !important;
   padding: 2.5rem 2.25rem !important;
   width: 95% !important;
-  max-width: 640px !important;
+  max-width: 680px !important;
   border: 1px solid rgba(203, 213, 225, 0.8) !important;
   box-sizing: border-box !important;
   margin: 0 auto !important;
+  overflow: hidden !important;
 }
 
 .public-register-card * {
@@ -517,15 +518,34 @@ body {
 
 .public-form-row {
   display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
-  gap: 1rem !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 1.25rem !important;
   width: 100% !important;
   margin-bottom: 0.25rem !important;
+}
+
+.public-form-row > .form-group {
+  min-width: 0 !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
+
+@media (max-width: 640px) {
+  .public-register-card {
+    padding: 1.75rem 1.25rem !important;
+    border-radius: 18px !important;
+  }
+
+  .public-form-row {
+    grid-template-columns: 1fr !important;
+    gap: 0.25rem !important;
+  }
 }
 
 .public-register-card .form-group {
   margin-bottom: 1.1rem !important;
   width: 100% !important;
+  min-width: 0 !important;
   display: flex !important;
   flex-direction: column !important;
 }
