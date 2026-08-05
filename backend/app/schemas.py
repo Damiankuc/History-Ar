@@ -1,6 +1,29 @@
 from datetime import datetime
 from typing import List, Optional
+from pydantic import BaseModel
+from sqlmodel import SQLModel
 from models import PacienteBase, ConsultaBase
+
+# --- Esquemas de Usuario / Médico (Nube) ---
+
+class UsuarioRegister(BaseModel):
+    nombre: str
+    especialidad: Optional[str] = None
+    matricula: str
+    password: Optional[str] = None
+
+class UsuarioLogin(BaseModel):
+    nombre: str
+    matricula: str
+    password: Optional[str] = None
+
+class UsuarioRead(BaseModel):
+    id: int
+    nombre: str
+    especialidad: Optional[str] = None
+    matricula: str
+    firma_ruta: Optional[str] = None
+    fecha_creacion: Optional[datetime] = None
 
 # --- Esquemas para Consulta ---
 
@@ -14,15 +37,14 @@ class ConsultaRead(ConsultaBase):
 # --- Esquemas para Paciente ---
 
 class PacienteCreate(PacienteBase):
-    pass
+    usuario_id: Optional[int] = None
 
 class PacienteRead(PacienteBase):
     id: int
     fecha_creacion: datetime
+    usuario_id: Optional[int] = None
 
 # --- Esquemas para Documento ---
-
-from sqlmodel import SQLModel
 
 class DocumentoRead(SQLModel):
     id: int
@@ -31,7 +53,7 @@ class DocumentoRead(SQLModel):
     tipo_mimetype: str
     fecha_subida: datetime
     paciente_id: int
-    consulta_id: Optional[int]
+    consulta_id: Optional[int] = None
 
 # --- Esquemas para Configuración Médica ---
 
@@ -40,8 +62,8 @@ class ConfiguracionRead(SQLModel):
     doctor_nombre: str
     doctor_especialidad: str
     doctor_matricula: str
-    firma_ruta: Optional[str]
-    pedir_password_al_iniciar: bool
+    firma_ruta: Optional[str] = None
+    pedir_password_al_iniciar: bool = False
 
 class ConfiguracionUpdate(SQLModel):
     doctor_nombre: Optional[str] = None
@@ -49,7 +71,7 @@ class ConfiguracionUpdate(SQLModel):
     doctor_matricula: Optional[str] = None
     pedir_password_al_iniciar: Optional[bool] = None
 
-# --- Schemas de Autenticación ---
+# --- Schemas de Autenticación Legacy ---
 
 class LoginRequest(SQLModel):
     password: str
@@ -60,8 +82,8 @@ class CambiarPasswordRequest(SQLModel):
 
 class AuthEstadoRead(SQLModel):
     pedir_password_al_iniciar: bool
-    tiene_password: bool  # siempre True (hay password por defecto)
-    primer_inicio_completado: bool  # False = primera vez, debe pedir activación
+    tiene_password: bool
+    primer_inicio_completado: bool
 
 # --- Esquemas para Receta ---
 
@@ -74,10 +96,10 @@ class RecetaCreate(SQLModel):
 class RecetaRead(SQLModel):
     id: int
     medicamentos: str
-    indicaciones: Optional[str]
+    indicaciones: Optional[str] = None
     fecha: datetime
     paciente_id: int
-    consulta_id: Optional[int]
+    consulta_id: Optional[int] = None
 
 # --- Esquemas para Cita ---
 
@@ -109,4 +131,3 @@ class PacienteReadConConsultas(PacienteRead):
 
 class ConsultaReadConPaciente(ConsultaRead):
     paciente: PacienteRead
-
