@@ -501,15 +501,25 @@ body {
 
 .public-register-card {
   background: #ffffff !important;
-  border-radius: 20px !important;
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.08) !important;
-  padding: 2.25rem 2rem !important;
+  border-radius: 24px !important;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.09) !important;
+  padding: 2.5rem 2.25rem !important;
   width: 95% !important;
-  max-width: 540px !important;
-  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  max-width: 620px !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
   box-sizing: border-box !important;
   margin: 0 auto !important;
   overflow: hidden !important;
+}
+
+@media (max-width: 580px) {
+  .public-register-card {
+    padding: 1.75rem 1.25rem !important;
+  }
+  .public-register-card form > div[style*="grid"] {
+    grid-template-columns: 1fr !important;
+    gap: 0.5rem !important;
+  }
 }
 
 .public-register-card * {

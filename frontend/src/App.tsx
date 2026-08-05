@@ -1188,7 +1188,7 @@ function App() {
   if (isPublicRegisterMode) {
     return (
       <div className="public-register-bg" style={{ minHeight: "100vh", background: "linear-gradient(135deg, #eef2f7 0%, #e0f2fe 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1.5rem 1rem", fontFamily: "'Inter', system-ui, -apple-system, sans-serif", boxSizing: "border-box" }}>
-        <div className="public-register-card" style={{ background: "#ffffff", borderRadius: "20px", boxShadow: "0 12px 35px rgba(0, 0, 0, 0.08)", padding: "2.25rem 2rem", width: "95%", maxWidth: "540px", border: "1px solid rgba(226, 232, 240, 0.8)", boxSizing: "border-box", margin: "0 auto", overflow: "hidden" }}>
+        <div className="public-register-card" style={{ background: "#ffffff", borderRadius: "24px", boxShadow: "0 15px 40px rgba(0, 0, 0, 0.09)", padding: "2.5rem 2.25rem", width: "95%", maxWidth: "620px", border: "1px solid rgba(226, 232, 240, 0.9)", boxSizing: "border-box", margin: "0 auto", overflow: "hidden" }}>
           <div className="public-register-header" style={{ textAlign: "center", marginBottom: "1.75rem" }}>
             <div style={{ fontSize: "2.5rem", marginBottom: "0.4rem" }}>🏥</div>
             <h1 style={{ fontSize: "1.45rem", color: "#0f172a", marginBottom: "0.35rem", fontWeight: 700 }}>{configuracion.doctor_nombre || currentUsuario?.nombre || "Consultorio Médico"}</h1>
