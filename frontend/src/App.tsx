@@ -1226,7 +1226,7 @@ function App() {
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div className="public-form-row">
                 <div className="form-group">
                   <label className="form-label">Nombre *</label>
                   <input
@@ -1251,7 +1251,7 @@ function App() {
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div className="public-form-row">
                 <div className="form-group">
                   <label className="form-label">DNI / Documento *</label>
                   <input
@@ -1275,7 +1275,7 @@ function App() {
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div className="public-form-row">
                 <div className="form-group">
                   <label className="form-label">Teléfono / WhatsApp</label>
                   <input
@@ -1298,7 +1298,7 @@ function App() {
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div className="public-form-row">
                 <div className="form-group">
                   <label className="form-label">Obra Social / Cobertura</label>
                   <input

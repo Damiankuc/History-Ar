@@ -489,79 +489,99 @@ body {
 /* --- Estilos para la Vista Pública de Auto-Registro en Celulares --- */
 .public-register-bg {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%);
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem 1rem;
+  padding: 2rem 1rem;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  box-sizing: border-box;
 }
 
 .public-register-card {
-  background: #ffffff;
-  border-radius: 20px;
-  box-shadow: 0 20px 30px -10px rgba(15, 23, 42, 0.1), 0 10px 15px -5px rgba(15, 23, 42, 0.04);
-  padding: 2.25rem 1.75rem;
-  width: 100%;
-  max-width: 500px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-sizing: border-box;
+  background: #ffffff !important;
+  border-radius: 24px !important;
+  box-shadow: 0 25px 40px -12px rgba(15, 23, 42, 0.12), 0 10px 20px -8px rgba(15, 23, 42, 0.05) !important;
+  padding: 2.5rem 2.25rem !important;
+  width: 95% !important;
+  max-width: 640px !important;
+  border: 1px solid rgba(203, 213, 225, 0.8) !important;
+  box-sizing: border-box !important;
+  margin: 0 auto !important;
 }
 
 .public-register-card * {
-  box-sizing: border-box;
+  box-sizing: border-box !important;
+}
+
+.public-form-row {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
+  gap: 1rem !important;
+  width: 100% !important;
+  margin-bottom: 0.25rem !important;
 }
 
 .public-register-card .form-group {
-  margin-bottom: 1rem;
-  width: 100%;
+  margin-bottom: 1.1rem !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 .public-register-card .form-label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
+  display: block !important;
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
   color: #334155 !important;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.4rem !important;
 }
 
-.public-register-card .form-input {
+.public-register-card input.form-input,
+.public-register-card textarea.form-input,
+.public-register-card select.form-input {
   width: 100% !important;
+  min-width: 0 !important;
   max-width: 100% !important;
-  background-color: #f8fafc !important;
+  background-color: #f1f5f9 !important;
   color: #0f172a !important;
   border: 1.5px solid #cbd5e1 !important;
-  border-radius: 10px !important;
-  padding: 0.65rem 0.85rem !important;
-  font-size: 0.92rem !important;
+  border-radius: 12px !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 0.95rem !important;
   font-family: inherit !important;
   box-sizing: border-box !important;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease !important;
 }
 
-.public-register-card .form-input::placeholder {
-  color: #94a3b8 !important;
+.public-register-card input.form-input::placeholder,
+.public-register-card textarea.form-input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
 }
 
-.public-register-card .form-input:focus {
+.public-register-card input.form-input:focus,
+.public-register-card textarea.form-input:focus {
   outline: none !important;
   background-color: #ffffff !important;
   border-color: #0284c7 !important;
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.18) !important;
+  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.18) !important;
 }
 
 .public-register-card .btn-primary {
+  width: 100% !important;
   background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
   color: #ffffff !important;
-  font-weight: 600 !important;
-  font-size: 1rem !important;
-  border-radius: 12px !important;
-  padding: 0.85rem 1.25rem !important;
+  font-weight: 700 !important;
+  font-size: 1.05rem !important;
+  border-radius: 14px !important;
+  padding: 0.9rem 1.5rem !important;
   border: none !important;
-  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3) !important;
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.3) !important;
   cursor: pointer !important;
   transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+  margin-top: 0.75rem !important;
 }
 
 .public-register-card .btn-primary:hover {
