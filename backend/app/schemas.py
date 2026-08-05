@@ -131,3 +131,11 @@ class PacienteReadConConsultas(PacienteRead):
 
 class ConsultaReadConPaciente(ConsultaRead):
     paciente: PacienteRead
+
+# --- Esquema para Notificación de Citas por Email ---
+
+class EnviarEmailRequest(BaseModel):
+    smtp_email: Optional[str] = None
+    smtp_password: Optional[str] = None
+    email_destino: Optional[str] = None
+

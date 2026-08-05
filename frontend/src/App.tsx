@@ -149,6 +149,84 @@ function App() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
+  // --- Estados de Notificaciones (WhatsApp & Gmail) ---
+  const [smtpForm, setSmtpForm] = useState({
+    smtp_email: localStorage.getItem("history_ar_smtp_email") || "",
+    smtp_password: localStorage.getItem("history_ar_smtp_pass") || ""
+  });
+  const [notificationModal, setNotificationModal] = useState<{
+    cita: any;
+    paciente?: any;
+  } | null>(null);
+  const [sendingEmailState, setSendingEmailState] = useState(false);
+  const [emailStatusMsg, setEmailStatusMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  // Formateador universal de números para WhatsApp
+  const formatWhatsAppNumber = (phone?: string) => {
+    if (!phone) return "";
+    let cleaned = phone.replace(/\D/g, "");
+    if (!cleaned) return "";
+    if (cleaned.startsWith("0")) cleaned = cleaned.substring(1);
+    if (cleaned.startsWith("15")) cleaned = cleaned.substring(2);
+    if (!cleaned.startsWith("54")) {
+      if (!cleaned.startsWith("9") && cleaned.length >= 10) {
+        cleaned = "549" + cleaned;
+      } else {
+        cleaned = "54" + cleaned;
+      }
+    }
+    return cleaned;
+  };
+
+  const getWhatsAppLink = (cita: any, pacienteObj?: any) => {
+    const target = pacienteObj || cita.paciente;
+    const phone = formatWhatsAppNumber(target?.telefono);
+    if (!phone) return "";
+    const dt = new Date(cita.fecha_hora);
+    const fechaStr = dt.toLocaleDateString("es-AR");
+    const horaStr = dt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+    const docName = configuracion.doctor_nombre || currentUsuario?.nombre || "médico";
+    const msg = `Hola ${target?.nombre || ""}! Te confirmamos tu turno médico para el día ${fechaStr} a las ${horaStr} hs con el/la ${docName}. Motivo: ${cita.motivo}.`;
+    return `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`;
+  };
+
+  const handleSendEmailNotification = async (citaId: number, targetEmail?: string) => {
+    if (!smtpForm.smtp_email || !smtpForm.smtp_password) {
+      setEmailStatusMsg({ type: "err", text: "Por favor ingresá tu e-mail emisor y contraseña de aplicación de Gmail en Configuración." });
+      return;
+    }
+    try {
+      setSendingEmailState(true);
+      setEmailStatusMsg(null);
+      const res = await fetch(`${API_BASE_URL}/citas/${citaId}/enviar-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          smtp_email: smtpForm.smtp_email,
+          smtp_password: smtpForm.smtp_password,
+          email_destino: targetEmail
+        })
+      });
+      if (res.ok) {
+        setEmailStatusMsg({ type: "ok", text: "✓ Correo enviado exitosamente a la casilla del paciente." });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setEmailStatusMsg({ type: "err", text: errData.detail || "No se pudo enviar el e-mail." });
+      }
+    } catch {
+      setEmailStatusMsg({ type: "err", text: "Error de conexión con el servidor de correo." });
+    } finally {
+      setSendingEmailState(false);
+    }
+  };
+
+  const handleSaveSmtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem("history_ar_smtp_email", smtpForm.smtp_email);
+    localStorage.setItem("history_ar_smtp_pass", smtpForm.smtp_password);
+    alert("Configuración de correo (Gmail SMTP) guardada con éxito.");
+  };
+
   // --- Estados del formulario de cambio de contraseña (en Configuración) ---
   const [passwordForm, setPasswordForm] = useState({
     password_actual: "",
@@ -795,9 +873,12 @@ function App() {
       });
 
       if (res.ok) {
-        alert("Turno programado correctamente");
+        const citaData = await res.json();
+        const pacienteTarget = pacientes.find(p => p.id === parseInt(newCita.paciente_id));
         setNewCita({ paciente_id: "", fecha: "", hora: "", duracion_minutos: 30, motivo: "" });
         loadCitas();
+        setEmailStatusMsg(null);
+        setNotificationModal({ cita: citaData, paciente: pacienteTarget });
       } else {
         alert("Error al programar el turno");
       }
@@ -2207,6 +2288,9 @@ function App() {
                                 </button>
                               </>
                             )}
+                            <button className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", color: "#0f766e", borderColor: "rgba(15,118,110,0.3)" }} onClick={() => { setEmailStatusMsg(null); setNotificationModal({ cita }); }}>
+                              📲 Notificar
+                            </button>
                             <button className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", marginLeft: "auto" }} onClick={() => handleDeleteCita(cita.id)}>
                               🗑️ Eliminar
                             </button>
@@ -2529,11 +2613,202 @@ function App() {
                   </div>
                 </div>
 
+                {/* 📧 Configuración de Gmail para Confirmación de Turnos */}
+                <div className="card">
+                  <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>📧 Notificaciones por Gmail (SMTP)</h3>
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+                    Configurá tu casilla de Gmail y tu contraseña de aplicación para enviar e-mails de confirmación de turnos a los pacientes.
+                  </p>
+                  <form onSubmit={handleSaveSmtp}>
+                    <div className="form-group">
+                      <label className="form-label">Tu e-mail de Gmail</label>
+                      <input
+                        type="email"
+                        className="form-input"
+                        placeholder="ej. consultorio.medico@gmail.com"
+                        value={smtpForm.smtp_email}
+                        onChange={(e) => setSmtpForm({ ...smtpForm, smtp_email: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Contraseña de Aplicación de Gmail</label>
+                      <input
+                        type="password"
+                        className="form-input"
+                        placeholder="Contraseña de 16 caracteres de Google"
+                        value={smtpForm.smtp_password}
+                        onChange={(e) => setSmtpForm({ ...smtpForm, smtp_password: e.target.value })}
+                      />
+                      <small style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginTop: "4px" }}>
+                        💡 Generala en: Cuenta de Google &gt; Seguridad &gt; Verificación en 2 pasos &gt; Contraseñas de aplicaciones.
+                      </small>
+                    </div>
+                    <button type="submit" className="btn btn-primary" style={{ width: "100%" }}>
+                      💾 Guardar Configuración de Gmail
+                    </button>
+                  </form>
+                </div>
+
               </div>{/* fin columna derecha */}
             </div>
           </div>
         )}
       </main>
+
+      {/* --- Modal Flotante de Notificación de Turnos (WhatsApp / Gmail / Ambos) --- */}
+      {notificationModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(15, 23, 42, 0.6)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "1rem"
+        }}>
+          <div style={{
+            background: "#ffffff",
+            borderRadius: "16px",
+            padding: "2rem",
+            maxWidth: "460px",
+            width: "100%",
+            boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+            animation: "fadeIn 0.2s ease-out"
+          }}>
+            <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.3rem" }}>📅</div>
+              <h2 style={{ fontSize: "1.25rem", color: "#0f172a", margin: 0, fontWeight: 700 }}>¡Turno Confirmado!</h2>
+              <p style={{ fontSize: "0.88rem", color: "#64748b", marginTop: "0.3rem" }}>
+                ¿A dónde deseas enviar la confirmación del turno?
+              </p>
+            </div>
+
+            <div style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              padding: "1rem",
+              marginBottom: "1.5rem",
+              fontSize: "0.85rem",
+              color: "#334155"
+            }}>
+              <div>👤 <strong>Paciente:</strong> {notificationModal.paciente?.nombre || notificationModal.cita.paciente?.nombre} {notificationModal.paciente?.apellido || notificationModal.cita.paciente?.apellido}</div>
+              <div style={{ marginTop: "4px" }}>📱 <strong>Teléfono:</strong> {notificationModal.paciente?.telefono || notificationModal.cita.paciente?.telefono || "No registrado"}</div>
+              <div style={{ marginTop: "4px" }}>📧 <strong>Email:</strong> {notificationModal.paciente?.email || notificationModal.cita.paciente?.email || "No registrado"}</div>
+              <div style={{ marginTop: "4px" }}>📆 <strong>Fecha:</strong> {new Date(notificationModal.cita.fecha_hora).toLocaleDateString()} {new Date(notificationModal.cita.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} hs</div>
+            </div>
+
+            {emailStatusMsg && (
+              <div style={{
+                padding: "0.75rem",
+                borderRadius: "8px",
+                fontSize: "0.85rem",
+                marginBottom: "1rem",
+                background: emailStatusMsg.type === "ok" ? "#f0fdf4" : "#fef2f2",
+                color: emailStatusMsg.type === "ok" ? "#15803d" : "#b91c1c",
+                border: `1px solid ${emailStatusMsg.type === "ok" ? "#bbf7d0" : "#fecaca"}`
+              }}>
+                {emailStatusMsg.text}
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {/* Opción WhatsApp */}
+              {getWhatsAppLink(notificationModal.cita, notificationModal.paciente) ? (
+                <a
+                  href={getWhatsAppLink(notificationModal.cita, notificationModal.paciente)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn"
+                  style={{
+                    background: "#25d366",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    textDecoration: "none",
+                    padding: "0.75rem",
+                    borderRadius: "8px"
+                  }}
+                >
+                  💬 Enviar por WhatsApp
+                </a>
+              ) : (
+                <div style={{ fontSize: "0.78rem", color: "#94a3b8", textAlign: "center", fontStyle: "italic" }}>
+                  (El paciente no tiene teléfono registrado para WhatsApp)
+                </div>
+              )}
+
+              {/* Opción Gmail */}
+              <button
+                type="button"
+                disabled={sendingEmailState}
+                onClick={() => handleSendEmailNotification(notificationModal.cita.id, notificationModal.paciente?.email || notificationModal.cita.paciente?.email)}
+                className="btn"
+                style={{
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "0.75rem",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: sendingEmailState ? "wait" : "pointer"
+                }}
+              >
+                📧 {sendingEmailState ? "Enviando por Gmail..." : "Enviar por Gmail"}
+              </button>
+
+              {/* Opción Ambos */}
+              {getWhatsAppLink(notificationModal.cita, notificationModal.paciente) && (
+                <button
+                  type="button"
+                  disabled={sendingEmailState}
+                  onClick={() => {
+                    handleSendEmailNotification(notificationModal.cita.id, notificationModal.paciente?.email || notificationModal.cita.paciente?.email);
+                    window.open(getWhatsAppLink(notificationModal.cita, notificationModal.paciente), "_blank");
+                  }}
+                  className="btn"
+                  style={{
+                    background: "linear-gradient(135deg, #25d366 0%, #2563eb 100%)",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    padding: "0.75rem",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: sendingEmailState ? "wait" : "pointer"
+                  }}
+                >
+                  📩 Enviar por Ambos (WhatsApp + Gmail)
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setNotificationModal(null)}
+                className="btn btn-secondary"
+                style={{ marginTop: "0.5rem", padding: "0.6rem" }}
+              >
+                ✕ Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- Plantilla HTML de Impresión de Historia Clínica (Visible en Impresora) --- */}
       {printData && (

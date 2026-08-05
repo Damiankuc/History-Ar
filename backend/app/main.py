@@ -42,7 +42,8 @@ from schemas import (
     CitaCreate,
     CitaRead,
     CitaReadConPaciente,
-    AuthEstadoRead
+    AuthEstadoRead,
+    EnviarEmailRequest
 )
 import crud
 import scanner
@@ -469,6 +470,95 @@ def eliminar_cita(cita_id: int):
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
     return {"message": "Cita eliminada con éxito"}
+
+@app.post("/api/citas/{cita_id}/enviar-email")
+def enviar_email_cita(cita_id: int, req: EnviarEmailRequest):
+    """Envía un correo de confirmación de turno médico al paciente vía SMTP (Gmail)."""
+    cita = crud.get_cita(cita_id)
+    if not cita:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
+        
+    paciente = crud.get_paciente(cita["paciente_id"])
+    if not paciente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente no encontrado")
+        
+    dest_email = (req.email_destino or paciente.get("email") or "").strip()
+    if not dest_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El paciente no tiene una dirección de e-mail registrada."
+        )
+        
+    smtp_email = (req.smtp_email or "").strip()
+    smtp_pass = (req.smtp_password or "").strip()
+    
+    if not smtp_email or not smtp_pass:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Por favor ingresá tu e-mail emisor y contraseña de aplicación de Gmail en Configuración."
+        )
+
+    # Formatear fecha y hora
+    try:
+        dt = datetime.fromisoformat(cita["fecha_hora"].replace("Z", "+00:00"))
+        fecha_str = dt.strftime("%d/%m/%Y a las %H:%M hs")
+    except Exception:
+        fecha_str = str(cita["fecha_hora"])
+
+    config = crud.get_configuracion()
+    doc_nombre = config.get("doctor_nombre") or "Doctor"
+    doc_esp = config.get("doctor_especialidad") or ""
+    doc_mat = config.get("doctor_matricula") or ""
+
+    # Construir email HTML
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Confirmación de Turno Médico - {doc_nombre}"
+    msg["From"] = smtp_email
+    msg["To"] = dest_email
+
+    html_content = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #334155;">
+        <div style="max-width: 550px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+          <div style="text-align: center; border-bottom: 2px solid #008080; padding-bottom: 15px; margin-bottom: 20px;">
+            <h2 style="color: #008080; margin: 0; font-size: 1.4rem;">Confirmación de Turno Médico</h2>
+            <p style="color: #64748b; font-size: 0.9rem; margin-top: 5px;">History-Ar Medical System</p>
+          </div>
+          <p>Hola <strong>{paciente.get('nombre', '')} {paciente.get('apellido', '')}</strong>,</p>
+          <p>Te confirmamos que tenés un turno médico programado:</p>
+          
+          <div style="background-color: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 8px; padding: 15px; margin: 20px 0;">
+            <p style="margin: 5px 0;">📅 <strong>Fecha y Hora:</strong> {fecha_str}</p>
+            <p style="margin: 5px 0;">🩺 <strong>Profesional:</strong> {doc_nombre} ({doc_esp})</p>
+            <p style="margin: 5px 0;">📋 <strong>Matrícula:</strong> {doc_mat}</p>
+            <p style="margin: 5px 0;">📝 <strong>Motivo de Consulta:</strong> {cita.get('motivo', 'Consulta Médica')}</p>
+          </div>
+
+          <p style="font-size: 0.85rem; color: #64748b; text-align: center; margin-top: 25px;">
+            Si necesitas reprogramar o cancelar tu turno, por favor ponte en contacto a la brevedad.
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+
+    msg.attach(MIMEText(html_content, "html"))
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(smtp_email, smtp_pass)
+            server.sendmail(smtp_email, dest_email, msg.as_string())
+        return {"ok": True, "message": f"Correo enviado exitosamente a {dest_email}"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"No se pudo enviar el correo vía Gmail: {str(e)}"
+        )
 
 # Servir frontend estático si existe
 base_path = sys._MEIPASS if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS') else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
