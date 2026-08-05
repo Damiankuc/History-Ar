@@ -18,6 +18,13 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
+# Prevenir 'NoneType object has no attribute isatty' en executables noconsole de PyInstaller
+if getattr(sys, 'frozen', False):
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
+
 from schemas import (
     UsuarioRegister,
     UsuarioLogin,
@@ -471,4 +478,7 @@ if os.path.exists(static_dir):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    if getattr(sys, 'frozen', False):
+        uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
+    else:
+        uvicorn.run(app, host="127.0.0.1", port=8000)
