@@ -1769,9 +1769,9 @@ function App() {
     <div className="app-container">
       {/* Sidebar de Navegación */}
       <aside className="sidebar">
-        <div className="logo-container" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <img src="/logo.png" alt="History-Ar Logo" style={{ width: "42px", height: "42px", objectFit: "contain" }} />
-          <span className="logo-text" style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--primary)" }}>History-Ar</span>
+        <div className="logo-container">
+          <div className="logo-icon">H</div>
+          <span className="logo-text">History-Ar</span>
         </div>
 
         {/* Card de Usuario en Sesión */}
