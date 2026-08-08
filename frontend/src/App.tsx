@@ -410,7 +410,17 @@ function App() {
 
   // --- Estados de importación de PDF ---
   const [importingPdf, setImportingPdf] = useState(false);
-  const [pdfPreview, setPdfPreview] = useState<{texto: string; paginas: number} | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{
+    texto: string;
+    paginas: number;
+    estructurado?: {
+      motivo?: string;
+      diagnostico?: string;
+      tratamiento?: string;
+      observaciones?: string;
+    };
+    modoVista?: "estructurado" | "raw";
+  } | null>(null);
 
   // --- Estado de Firma (Caché invalidation) ---
   const [signatureKey, setSignatureKey] = useState(Date.now());
@@ -661,7 +671,17 @@ function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        setPdfPreview({ texto: data.texto, paginas: data.paginas });
+        setPdfPreview({
+          texto: data.texto,
+          paginas: data.paginas,
+          estructurado: data.estructurado || {
+            motivo: "",
+            diagnostico: data.texto,
+            tratamiento: "",
+            observaciones: ""
+          },
+          modoVista: "estructurado"
+        });
       } else {
         const err = await res.json();
         alert(`Error al procesar el PDF: ${err.detail || "Inténtalo de nuevo."}`);
@@ -677,15 +697,15 @@ function App() {
   // Confirmar importación de PDF → cargar en formulario de nueva consulta
   const handleConfirmarPdfImport = () => {
     if (!pdfPreview) return;
-    // Pre-cargar el texto en el formulario de nueva consulta
+    const est = pdfPreview.estructurado;
     setNewConsulta({
-      motivo: "Historia clínica importada de PDF",
-      diagnostico: pdfPreview.texto,
-      tratamiento: "",
-      notas: ""
+      motivo: est?.motivo?.trim() || "Historia clínica importada de PDF",
+      diagnostico: est?.diagnostico?.trim() || pdfPreview.texto,
+      tratamiento: est?.tratamiento?.trim() || "",
+      notas: est?.observaciones?.trim() || ""
     });
     setPdfPreview(null);
-    // Navegar a la pestaña de consultas para que el médico edite y guarde
+    // Navegar a la pestaña de consultas para que el médico revise y guarde
     setPatientSubTab("consultas");
   };
 
@@ -2184,7 +2204,7 @@ function App() {
                             </div>
                           )}
 
-                          {/* Modal / preview del PDF importado */}
+                          {/* Modal / preview del PDF importado con Secciones Inteligentes */}
                           {pdfPreview && (
                             <div style={{
                               marginTop: "1.5rem",
@@ -2193,23 +2213,116 @@ function App() {
                               border: "1px solid rgba(139,92,246,0.3)",
                               borderRadius: "10px"
                             }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
                                 <strong style={{ color: "#8b5cf6", fontSize: "0.95rem" }}>
-                                  📄 Texto extraído del PDF ({pdfPreview.paginas} {pdfPreview.paginas === 1 ? "página" : "páginas"})
+                                  🧠 Anotador y Parser Inteligente de PDF ({pdfPreview.paginas} {pdfPreview.paginas === 1 ? "página" : "páginas"})
                                 </strong>
-                                <button className="btn btn-secondary" style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }} onClick={() => setPdfPreview(null)}>
-                                  ✕ Descartar
-                                </button>
+
+                                <div style={{ display: "flex", gap: "0.4rem" }}>
+                                  <button
+                                    className={`btn ${pdfPreview.modoVista !== "raw" ? "btn-primary" : "btn-secondary"}`}
+                                    style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem" }}
+                                    onClick={() => setPdfPreview({ ...pdfPreview, modoVista: "estructurado" })}
+                                  >
+                                    🧩 Secciones divididas
+                                  </button>
+                                  <button
+                                    className={`btn ${pdfPreview.modoVista === "raw" ? "btn-primary" : "btn-secondary"}`}
+                                    style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem" }}
+                                    onClick={() => setPdfPreview({ ...pdfPreview, modoVista: "raw" })}
+                                  >
+                                    📄 Texto completo (Raw)
+                                  </button>
+                                  <button className="btn btn-secondary" style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem", color: "#ef4444" }} onClick={() => setPdfPreview(null)}>
+                                    ✕ Descartar
+                                  </button>
+                                </div>
                               </div>
-                              <textarea
-                                className="form-input"
-                                rows={8}
-                                style={{ resize: "vertical", fontSize: "0.85rem", fontFamily: "monospace", whiteSpace: "pre-wrap" }}
-                                value={pdfPreview.texto}
-                                onChange={(e) => setPdfPreview({ ...pdfPreview, texto: e.target.value })}
-                              />
-                              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.5rem", marginBottom: "1rem" }}>
-                                💡 Podés editar el texto antes de importarlo. Al confirmar, se pre-cargará en el formulario de nueva consulta.
+
+                              {pdfPreview.modoVista === "raw" ? (
+                                <div>
+                                  <textarea
+                                    className="form-input"
+                                    rows={8}
+                                    style={{ resize: "vertical", fontSize: "0.85rem", fontFamily: "monospace", whiteSpace: "pre-wrap", width: "100%" }}
+                                    value={pdfPreview.texto}
+                                    onChange={(e) => setPdfPreview({ ...pdfPreview, texto: e.target.value })}
+                                  />
+                                </div>
+                              ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                                  <div>
+                                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#4c1d95", marginBottom: "0.2rem" }}>
+                                      📋 Motivo de Consulta / Síntomas:
+                                    </label>
+                                    <input
+                                      type="text"
+                                      className="form-input"
+                                      style={{ width: "100%", fontSize: "0.85rem" }}
+                                      value={pdfPreview.estructurado?.motivo || ""}
+                                      placeholder="Sin motivo detectado..."
+                                      onChange={(e) => setPdfPreview({
+                                        ...pdfPreview,
+                                        estructurado: { ...pdfPreview.estructurado, motivo: e.target.value }
+                                      })}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#4c1d95", marginBottom: "0.2rem" }}>
+                                      🩺 Diagnóstico:
+                                    </label>
+                                    <textarea
+                                      rows={2}
+                                      className="form-input"
+                                      style={{ width: "100%", fontSize: "0.85rem", resize: "vertical" }}
+                                      value={pdfPreview.estructurado?.diagnostico || ""}
+                                      placeholder="Sin diagnóstico detectado..."
+                                      onChange={(e) => setPdfPreview({
+                                        ...pdfPreview,
+                                        estructurado: { ...pdfPreview.estructurado, diagnostico: e.target.value }
+                                      })}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#4c1d95", marginBottom: "0.2rem" }}>
+                                      💊 Tratamiento / Medicación:
+                                    </label>
+                                    <textarea
+                                      rows={2}
+                                      className="form-input"
+                                      style={{ width: "100%", fontSize: "0.85rem", resize: "vertical" }}
+                                      value={pdfPreview.estructurado?.tratamiento || ""}
+                                      placeholder="Sin tratamiento detectado..."
+                                      onChange={(e) => setPdfPreview({
+                                        ...pdfPreview,
+                                        estructurado: { ...pdfPreview.estructurado, tratamiento: e.target.value }
+                                      })}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#4c1d95", marginBottom: "0.2rem" }}>
+                                      📝 Observaciones / Evolución:
+                                    </label>
+                                    <textarea
+                                      rows={2}
+                                      className="form-input"
+                                      style={{ width: "100%", fontSize: "0.85rem", resize: "vertical" }}
+                                      value={pdfPreview.estructurado?.observaciones || ""}
+                                      placeholder="Sin observaciones detectadas..."
+                                      onChange={(e) => setPdfPreview({
+                                        ...pdfPreview,
+                                        estructurado: { ...pdfPreview.estructurado, observaciones: e.target.value }
+                                      })}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.75rem", marginBottom: "1rem" }}>
+                                💡 Podés revisar y editar los campos divididos. Al confirmar, se cargarán directamente en el formulario de la consulta.
                               </p>
                               <button
                                 id="btn-confirmar-pdf-import"
@@ -2217,7 +2330,7 @@ function App() {
                                 onClick={handleConfirmarPdfImport}
                                 style={{ width: "100%" }}
                               >
-                                ✅ Importar como Nueva Consulta
+                                ✅ Cargar Secciones en Nueva Consulta
                               </button>
                             </div>
                           )}

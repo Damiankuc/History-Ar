@@ -402,6 +402,80 @@ def _remover_fondo_blanco(input_bytes: bytes, bg_threshold: int = 175, ink_thres
     except Exception:
         return input_bytes
 
+import re
+
+def parse_medical_text(text: str) -> dict:
+    """
+    Analiza el texto extraído de una historia médica PDF e identifica automáticamente
+    las secciones comunes (Motivo/Síntomas, Diagnóstico, Tratamiento/Medicación, Observaciones/Notas).
+    """
+    sections = {
+        "motivo": "",
+        "diagnostico": "",
+        "tratamiento": "",
+        "observaciones": ""
+    }
+
+    if not text or not text.strip():
+        return sections
+
+    # Patrones de encabezados en minúsculas para matching flexible por expresiones regulares
+    motivo_patterns = [
+        r'(?:motivo(?:\s+de\s+consulta)?|s[íi]ntomas|anamnesis|enfermedad\s+actual|cuadro\s+cl[íi]nico|causa(?:\s+de\s+atenci[óo]n)?)\s*[:\-–]'
+    ]
+    diag_patterns = [
+        r'(?:diagn[óo]stico(?:\s+presuntivo|\s+definitivo)?|juicio\s+cl[íi]nico|impresi[óo]n\s+diagn[óo]stica|dx\.?)\s*[:\-–]'
+    ]
+    trat_patterns = [
+        r'(?:tratamiento|plan(?:\s+m[ée]dico|\s+terap[ée]utico)?|medicaci[óo]n|prescripci[óo]n|indicaciones|rp\.?|conducta)\s*[:\-–]'
+    ]
+    obs_patterns = [
+        r'(?:observaciones|notas(?:\s+adicionales)?|evoluci[óo]n|antecedentes|comentarios|resumen)\s*[:\-–]'
+    ]
+
+    header_regexes = []
+    for pat in motivo_patterns:
+        header_regexes.append((pat, "motivo"))
+    for pat in diag_patterns:
+        header_regexes.append((pat, "diagnostico"))
+    for pat in trat_patterns:
+        header_regexes.append((pat, "tratamiento"))
+    for pat in obs_patterns:
+        header_regexes.append((pat, "observaciones"))
+
+    matches = []
+    for pattern, sec_name in header_regexes:
+        for m in re.finditer(pattern, text, flags=re.IGNORECASE):
+            matches.append((m.start(), m.end(), sec_name))
+
+    matches.sort(key=lambda x: x[0])
+
+    if not matches:
+        sections["diagnostico"] = text.strip()
+        return sections
+
+    first_start = matches[0][0]
+    preamble = text[:first_start].strip()
+
+    for i in range(len(matches)):
+        start_idx, end_idx, sec_name = matches[i]
+        next_start = matches[i + 1][0] if i + 1 < len(matches) else len(text)
+        content = text[end_idx:next_start].strip()
+
+        if content:
+            if sections[sec_name]:
+                sections[sec_name] += "\n" + content
+            else:
+                sections[sec_name] = content
+
+    if preamble:
+        if not sections["motivo"]:
+            sections["motivo"] = preamble
+        else:
+            sections["motivo"] = preamble + "\n" + sections["motivo"]
+
+    return sections
+
 # --- Endpoints de Extracción de Texto de PDF ---
 
 @app.post("/api/pdf/extraer-texto")
@@ -425,7 +499,13 @@ def extraer_texto_pdf(file: UploadFile = File(...)):
         if not texto_total.strip():
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No se pudo extraer texto del PDF.")
         
-        return {"texto": texto_total, "paginas": num_paginas}
+        estructurado = parse_medical_text(texto_total)
+
+        return {
+            "texto": texto_total,
+            "paginas": num_paginas,
+            "estructurado": estructurado
+        }
     except HTTPException:
         raise
     except Exception as e:
