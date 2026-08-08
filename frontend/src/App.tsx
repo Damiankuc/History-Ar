@@ -1479,20 +1479,18 @@ function App() {
         }}>
           {/* Logo y Encabezado */}
           <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-            <div style={{
-              width: "56px",
-              height: "56px",
-              borderRadius: "14px",
-              background: "var(--primary, #008080)",
-              color: "#ffffff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "1.75rem",
-              fontWeight: "bold",
-              margin: "0 auto 1rem",
-              boxShadow: "0 4px 12px rgba(0, 128, 128, 0.25)"
-            }}>H</div>
+            <img
+              src="/logo.png"
+              alt="History-Ar Logo"
+              style={{
+                width: "64px",
+                height: "64px",
+                objectFit: "contain",
+                margin: "0 auto 1rem",
+                display: "block",
+                filter: "drop-shadow(0 4px 12px rgba(14, 116, 144, 0.25))"
+              }}
+            />
             <h1 style={{ color: "#0f172a", fontSize: "1.4rem", fontWeight: 700, margin: 0 }}>History-Ar Cloud</h1>
             <p style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.25rem" }}>Base de datos en la nube (Supabase)</p>
 
@@ -1771,9 +1769,9 @@ function App() {
     <div className="app-container">
       {/* Sidebar de Navegación */}
       <aside className="sidebar">
-        <div className="logo-container">
-          <div className="logo-icon">H</div>
-          <span className="logo-text">History-Ar</span>
+        <div className="logo-container" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <img src="/logo.png" alt="History-Ar Logo" style={{ width: "42px", height: "42px", objectFit: "contain" }} />
+          <span className="logo-text" style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--primary)" }}>History-Ar</span>
         </div>
 
         {/* Card de Usuario en Sesión */}
