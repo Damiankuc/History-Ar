@@ -419,60 +419,105 @@ def parse_medical_text(text: str) -> dict:
     if not text or not text.strip():
         return sections
 
-    # Patrones de encabezados en minúsculas para matching flexible por expresiones regulares
-    motivo_patterns = [
-        r'(?:motivo(?:\s+de\s+consulta)?|s[íi]ntomas|anamnesis|enfermedad\s+actual|cuadro\s+cl[íi]nico|causa(?:\s+de\s+atenci[óo]n)?)\s*[:\-–]'
-    ]
-    diag_patterns = [
-        r'(?:diagn[óo]stico(?:\s+presuntivo|\s+definitivo)?|juicio\s+cl[íi]nico|impresi[óo]n\s+diagn[óo]stica|dx\.?)\s*[:\-–]'
-    ]
-    trat_patterns = [
-        r'(?:tratamiento|plan(?:\s+m[ée]dico|\s+terap[ée]utico)?|medicaci[óo]n|prescripci[óo]n|indicaciones|rp\.?|conducta)\s*[:\-–]'
-    ]
-    obs_patterns = [
-        r'(?:observaciones|notas(?:\s+adicionales)?|evoluci[óo]n|antecedentes|comentarios|resumen)\s*[:\-–]'
-    ]
+    # Patrones de encabezados en línea única o títulos de sección (pueden llevar o no :, -, /, etc.)
+    motivo_re = re.compile(
+        r'^\s*(?:motivo(?:\s+de\s+consulta)?|s[íi]ntomas|anamnesis|enfermedad\s+actual|cuadro\s+cl[íi]nico|causa(?:\s+de\s+atenci[óo]n)?)\s*[:\-–\/]?\s*$',
+        re.IGNORECASE
+    )
+    diag_re = re.compile(
+        r'^\s*(?:diagn[óo]stico(?:\s+presuntivo|\s+definitivo)?|juicio\s+cl[íi]nico|impresi[óo]n\s+diagn[óo]stica|dx\.?)\s*[:\-–\/]?\s*$',
+        re.IGNORECASE
+    )
+    trat_re = re.compile(
+        r'^\s*(?:tratamiento(?:\s+m[ée]dico|\s+indicado)?|plan(?:\s+m[ée]dico|\s+terap[ée]utico)?|medicaci[óo]n(?:\s+de\s+control\s+continuo|\s+habitual)?|prescripci[óo]n(?:\s+m[ée]dica)?|rp\.?|conducta)\s*[:\-–\/]?\s*$',
+        re.IGNORECASE
+    )
+    obs_re = re.compile(
+        r'^\s*(?:observaciones(?:\s+adicionales)?|indicaciones(?:\s+adicionales)?|notas(?:\s+adicionales|\s+m[ée]dicas)?|evoluci[óo]n(?:\s+m[ée]dica)?|antecedentes(?:\s+patol[óo]gicos)?|comentarios|resumen)\s*[:\-–\/]?\s*$',
+        re.IGNORECASE
+    )
 
-    header_regexes = []
-    for pat in motivo_patterns:
-        header_regexes.append((pat, "motivo"))
-    for pat in diag_patterns:
-        header_regexes.append((pat, "diagnostico"))
-    for pat in trat_patterns:
-        header_regexes.append((pat, "tratamiento"))
-    for pat in obs_patterns:
-        header_regexes.append((pat, "observaciones"))
+    # Patrones en línea con contenido en la misma línea
+    inline_motivo = re.compile(r'^\s*(?:motivo(?:\s+de\s+consulta)?|s[íi]ntomas|anamnesis|enfermedad\s+actual|cuadro\s+cl[íi]nico)\s*[:\-–\/]\s*(.*)$', re.IGNORECASE)
+    inline_diag = re.compile(r'^\s*(?:diagn[óo]stico(?:\s+presuntivo|\s+definitivo)?|juicio\s+cl[íi]nico|impresi[óo]n\s+diagn[óo]stica|dx\.?)\s*[:\-–\/]\s*(.*)$', re.IGNORECASE)
+    inline_trat = re.compile(r'^\s*(?:tratamiento(?:\s+m[ée]dico)?|plan(?:\s+m[ée]dico)?|medicaci[óo]n(?:\s+de\s+control\s+continuo)?|prescripci[óo]n(?:\s+m[ée]dica)?|rp\.?)\s*[:\-–\/]\s*(.*)$', re.IGNORECASE)
+    inline_obs = re.compile(r'^\s*(?:observaciones(?:\s+adicionales)?|indicaciones(?:\s+adicionales)?|notas|evoluci[óo]n|antecedentes)\s*[:\-–\/]\s*(.*)$', re.IGNORECASE)
 
-    matches = []
-    for pattern, sec_name in header_regexes:
-        for m in re.finditer(pattern, text, flags=re.IGNORECASE):
-            matches.append((m.start(), m.end(), sec_name))
+    # Líneas administrativas de encabezado/pie de página que no son síntomas ni diagnóstico
+    admin_header_re = re.compile(
+        r'^\s*(?:centro\s+m[ée]dico|dr\.|dra\.|m[ée]dico|m\.p\.|m\.n\.|av\.|calle|piso|tel|paciente|d\.?n\.?i|edad|obra\s+social|n[°º]\s*afiliado|fecha\s+de\s+emisi[óo]n)',
+        re.IGNORECASE
+    )
 
-    matches.sort(key=lambda x: x[0])
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    
+    current_section = None
+    section_buffers = {
+        "motivo": [],
+        "diagnostico": [],
+        "tratamiento": [],
+        "observaciones": []
+    }
+    
+    for line in lines:
+        # 1. Coincidencia de título de sección en línea única
+        if motivo_re.match(line):
+            current_section = "motivo"
+            continue
+        elif diag_re.match(line):
+            current_section = "diagnostico"
+            continue
+        elif trat_re.match(line):
+            current_section = "tratamiento"
+            continue
+        elif obs_re.match(line):
+            current_section = "observaciones"
+            continue
 
-    if not matches:
-        sections["diagnostico"] = text.strip()
-        return sections
+        # 2. Coincidencia de prefijo con contenido en la misma línea
+        m_mot = inline_motivo.match(line)
+        if m_mot:
+            current_section = "motivo"
+            if m_mot.group(1).strip():
+                section_buffers["motivo"].append(m_mot.group(1).strip())
+            continue
 
-    first_start = matches[0][0]
-    preamble = text[:first_start].strip()
+        m_diag = inline_diag.match(line)
+        if m_diag:
+            current_section = "diagnostico"
+            if m_diag.group(1).strip():
+                section_buffers["diagnostico"].append(m_diag.group(1).strip())
+            continue
 
-    for i in range(len(matches)):
-        start_idx, end_idx, sec_name = matches[i]
-        next_start = matches[i + 1][0] if i + 1 < len(matches) else len(text)
-        content = text[end_idx:next_start].strip()
+        m_trat = inline_trat.match(line)
+        if m_trat:
+            current_section = "tratamiento"
+            if m_trat.group(1).strip():
+                section_buffers["tratamiento"].append(m_trat.group(1).strip())
+            continue
 
-        if content:
-            if sections[sec_name]:
-                sections[sec_name] += "\n" + content
-            else:
-                sections[sec_name] = content
+        m_obs = inline_obs.match(line)
+        if m_obs:
+            current_section = "observaciones"
+            if m_obs.group(1).strip():
+                section_buffers["observaciones"].append(m_obs.group(1).strip())
+            continue
 
-    if preamble:
-        if not sections["motivo"]:
-            sections["motivo"] = preamble
+        # 3. Asignación de líneas según la sección actual activa
+        if current_section is None:
+            if admin_header_re.match(line):
+                continue
+            section_buffers["motivo"].append(line)
         else:
-            sections["motivo"] = preamble + "\n" + sections["motivo"]
+            if admin_header_re.match(line) and ("fecha de emisión" in line.lower() or "dr." in line.lower()):
+                continue
+            section_buffers[current_section].append(line)
+
+    for sec in sections:
+        sections[sec] = "\n".join(section_buffers[sec]).strip()
+
+    if not sections["motivo"]:
+        sections["motivo"] = "Consulta Médica / Control General"
 
     return sections
 
