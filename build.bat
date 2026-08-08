@@ -40,7 +40,7 @@ if %errorlevel% neq 0 (
 :: --noconsole: corre sin consola negra de python en segundo plano
 :: --add-data "static;static": adjunta la carpeta estática dentro del ejecutable
 :: --icon: define el icono de la aplicacion
-call pyinstaller --onefile --noconsole --icon="logo.ico" --name="History-Ar" --add-data "static;static" app/main.py
+call pyinstaller --clean --onefile --noconsole --icon="logo.ico" --name="History-Ar" --add-data "static;static" app/main.py
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo la compilacion con PyInstaller.
     exit /b 1
