@@ -148,3 +148,16 @@ class EnviarEmailRequest(BaseModel):
     smtp_password: Optional[str] = None
     email_destino: Optional[str] = None
 
+# --- Esquema para Compartir Historia Médica con Profesional ---
+
+class CompartirHistoriaEmailRequest(BaseModel):
+    email_profesional: str
+    nombre_profesional: Optional[str] = None
+    mensaje_medico: Optional[str] = None
+    incluir_historia_clinica: bool = True
+    receta_ids: List[int] = []
+    documento_ids: List[int] = []
+    smtp_email: Optional[str] = None
+    smtp_password: Optional[str] = None
+
+

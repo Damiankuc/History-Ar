@@ -227,6 +227,80 @@ function App() {
     alert("Configuración de correo (Gmail SMTP) guardada con éxito.");
   };
 
+  // --- Estados y lógica para Compartir Historia Médica con Profesional ---
+  const [compartirModalOpen, setCompartirModalOpen] = useState(false);
+  const [compartirForm, setCompartirForm] = useState({
+    email_profesional: "",
+    nombre_profesional: "",
+    mensaje_medico: "",
+    incluir_historia_clinica: true,
+    receta_ids: [] as number[],
+    documento_ids: [] as number[]
+  });
+  const [isSendingCompartir, setIsSendingCompartir] = useState(false);
+  const [compartirStatusMsg, setCompartirStatusMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const handleOpenCompartirModal = () => {
+    if (!selectedPaciente) return;
+    const defaultRecetas = (selectedPaciente.recetas || []).map(r => r.id);
+    const defaultDocs = (selectedPaciente.documentos || []).map(d => d.id);
+    setCompartirForm({
+      email_profesional: "",
+      nombre_profesional: "",
+      mensaje_medico: "",
+      incluir_historia_clinica: true,
+      receta_ids: defaultRecetas,
+      documento_ids: defaultDocs
+    });
+    setCompartirStatusMsg(null);
+    setCompartirModalOpen(true);
+  };
+
+  const handleSendCompartirEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaciente) return;
+    if (!smtpForm.smtp_email || !smtpForm.smtp_password) {
+      setCompartirStatusMsg({
+        type: "err",
+        text: "Por favor configurá tu email emisor y contraseña de aplicación de Gmail en la pestaña Configuración antes de enviar."
+      });
+      return;
+    }
+    if (!compartirForm.email_profesional.trim()) {
+      setCompartirStatusMsg({
+        type: "err",
+        text: "Ingresá el correo electrónico del profesional receptor."
+      });
+      return;
+    }
+
+    try {
+      setIsSendingCompartir(true);
+      setCompartirStatusMsg(null);
+      const res = await fetch(`${API_BASE_URL}/pacientes/${selectedPaciente.id}/compartir-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...compartirForm,
+          smtp_email: smtpForm.smtp_email,
+          smtp_password: smtpForm.smtp_password
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setCompartirStatusMsg({ type: "ok", text: data.message || "✓ Historia clínica enviada con éxito al profesional." });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setCompartirStatusMsg({ type: "err", text: errData.detail || "Error al enviar la historia clínica por correo." });
+      }
+    } catch {
+      setCompartirStatusMsg({ type: "err", text: "Error de conexión al servidor al enviar el correo." });
+    } finally {
+      setIsSendingCompartir(false);
+    }
+  };
+
   // --- Estados del formulario de cambio de contraseña (en Configuración) ---
   const [passwordForm, setPasswordForm] = useState({
     password_actual: "",
@@ -1954,6 +2028,13 @@ function App() {
                       >
                         🖨️ Imprimir Historia
                       </button>
+                      <button 
+                        className="btn"
+                        onClick={handleOpenCompartirModal}
+                        style={{ padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.95rem", backgroundColor: "#0f766e", color: "#ffffff", border: "none", fontWeight: 600, marginLeft: "auto" }}
+                      >
+                        ✉️ Compartir con Colega
+                      </button>
                     </div>
 
                     {/* Contenido Pestaña 1: Consultas Clínicas */}
@@ -3119,6 +3200,229 @@ function App() {
                 ✕ Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Modal para Compartir Historia Clínica entre Profesionales --- */}
+      {compartirModalOpen && selectedPaciente && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(15, 23, 42, 0.65)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "1rem"
+        }}>
+          <div style={{
+            background: "#ffffff",
+            borderRadius: "16px",
+            maxWidth: "600px",
+            width: "100%",
+            maxHeight: "90vh",
+            overflowY: "auto",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+            padding: "2rem",
+            position: "relative"
+          }}>
+            <button
+              onClick={() => setCompartirModalOpen(false)}
+              style={{
+                position: "absolute",
+                top: "1.25rem",
+                right: "1.25rem",
+                background: "none",
+                border: "none",
+                fontSize: "1.5rem",
+                cursor: "pointer",
+                color: "#64748b"
+              }}
+            >
+              ✕
+            </button>
+
+            <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>✉️</div>
+              <h3 style={{ fontSize: "1.35rem", color: "#0f766e", margin: 0, fontWeight: 700 }}>
+                Compartir Historia Clínica con Profesional
+              </h3>
+              <p style={{ fontSize: "0.9rem", color: "#64748b", marginTop: "0.25rem" }}>
+                Paciente: <strong>{selectedPaciente.nombre} {selectedPaciente.apellido}</strong> (DNI: {selectedPaciente.dni})
+              </p>
+            </div>
+
+            <form onSubmit={handleSendCompartirEmail} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              
+              {/* Datos del profesional destinatario */}
+              <div style={{ background: "#f0fdfa", border: "1px solid #ccfbf1", borderRadius: "10px", padding: "1rem" }}>
+                <h4 style={{ color: "#0f766e", margin: "0 0 0.75rem 0", fontSize: "0.95rem" }}>👨‍⚕️ Datos del Profesional Destinatario</h4>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: "0.25rem" }}>
+                      Correo Electrónico del Colega *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="doctor.colega@clinica.com"
+                      value={compartirForm.email_profesional}
+                      onChange={(e) => setCompartirForm({ ...compartirForm, email_profesional: e.target.value })}
+                      style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: "0.25rem" }}>
+                      Nombre del Profesional (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Dr. Juan Pérez"
+                      value={compartirForm.nombre_profesional}
+                      onChange={(e) => setCompartirForm({ ...compartirForm, nombre_profesional: e.target.value })}
+                      style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: "0.25rem" }}>
+                      Mensaje / Observaciones para el Colega (Opcional)
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Estimado colega, adjunto resumen de historia clínica para interconsulta..."
+                      value={compartirForm.mensaje_medico}
+                      onChange={(e) => setCompartirForm({ ...compartirForm, mensaje_medico: e.target.value })}
+                      style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem", resize: "vertical" }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Selección de Contenidos a Enviar */}
+              <div>
+                <h4 style={{ color: "#334155", margin: "0 0 0.5rem 0", fontSize: "0.95rem" }}>📦 Selección de Contenido a Enviar</h4>
+                
+                {/* Checkbox Resumen de Historia Clínica */}
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.6rem", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", cursor: "pointer", marginBottom: "0.75rem", fontSize: "0.9rem" }}>
+                  <input
+                    type="checkbox"
+                    checked={compartirForm.incluir_historia_clinica}
+                    onChange={(e) => setCompartirForm({ ...compartirForm, incluir_historia_clinica: e.target.checked })}
+                    style={{ width: "18px", height: "18px", accentColor: "#0f766e" }}
+                  />
+                  <span>📋 <strong>Incluir Resumen de Consultas y Diagnósticos</strong> ({selectedPaciente.consultas?.length || 0} registros)</span>
+                </label>
+
+                {/* Selección de Recetas Médicas */}
+                {selectedPaciente.recetas && selectedPaciente.recetas.length > 0 && (
+                  <div style={{ marginBottom: "0.75rem", background: "#f8fafc", padding: "0.75rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#166534", marginBottom: "0.5rem" }}>
+                      📄 Recetas Médicas a Incluir ({compartirForm.receta_ids.length} de {selectedPaciente.recetas.length}):
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", maxHeight: "120px", overflowY: "auto" }}>
+                      {selectedPaciente.recetas.map((r) => {
+                        const isChecked = compartirForm.receta_ids.includes(r.id);
+                        return (
+                          <label key={r.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const newIds = e.target.checked
+                                  ? [...compartirForm.receta_ids, r.id]
+                                  : compartirForm.receta_ids.filter((id) => id !== r.id);
+                                setCompartirForm({ ...compartirForm, receta_ids: newIds });
+                              }}
+                              style={{ accentColor: "#166534" }}
+                            />
+                            <span>{r.fecha ? r.fecha.substring(0, 10) : "Receta"} - {r.medicamentos.substring(0, 45)}...</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Selección de Ficheros y Escaneos */}
+                {selectedPaciente.documentos && selectedPaciente.documentos.length > 0 && (
+                  <div style={{ background: "#f8fafc", padding: "0.75rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#0369a1", marginBottom: "0.5rem" }}>
+                      📁 Archivos y Escaneos Adjuntos ({compartirForm.documento_ids.length} de {selectedPaciente.documentos.length}):
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", maxHeight: "120px", overflowY: "auto" }}>
+                      {selectedPaciente.documentos.map((doc) => {
+                        const isChecked = compartirForm.documento_ids.includes(doc.id);
+                        return (
+                          <label key={doc.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const newIds = e.target.checked
+                                  ? [...compartirForm.documento_ids, doc.id]
+                                  : compartirForm.documento_ids.filter((id) => id !== doc.id);
+                                setCompartirForm({ ...compartirForm, documento_ids: newIds });
+                              }}
+                              style={{ accentColor: "#0369a1" }}
+                            />
+                            <span>📎 {doc.nombre}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status feedback */}
+              {compartirStatusMsg && (
+                <div style={{
+                  padding: "0.75rem",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  background: compartirStatusMsg.type === "ok" ? "#f0fdf4" : "#fef2f2",
+                  color: compartirStatusMsg.type === "ok" ? "#15803d" : "#b91c1c",
+                  border: `1px solid ${compartirStatusMsg.type === "ok" ? "#bbf7d0" : "#fecaca"}`
+                }}>
+                  {compartirStatusMsg.text}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setCompartirModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingCompartir}
+                  className="btn"
+                  style={{
+                    background: "#0f766e",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    padding: "0.6rem 1.25rem",
+                    borderRadius: "8px",
+                    border: "none",
+                    cursor: isSendingCompartir ? "wait" : "pointer"
+                  }}
+                >
+                  {isSendingCompartir ? "Enviando correo..." : "✉️ Enviar por Correo"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -43,7 +43,8 @@ from schemas import (
     CitaRead,
     CitaReadConPaciente,
     AuthEstadoRead,
-    EnviarEmailRequest
+    EnviarEmailRequest,
+    CompartirHistoriaEmailRequest
 )
 import crud
 import scanner
@@ -554,6 +555,217 @@ def enviar_email_cita(cita_id: int, req: EnviarEmailRequest):
             server.login(smtp_email, smtp_pass)
             server.sendmail(smtp_email, dest_email, msg.as_string())
         return {"ok": True, "message": f"Correo enviado exitosamente a {dest_email}"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"No se pudo enviar el correo vía Gmail: {str(e)}"
+        )
+
+@app.post("/api/pacientes/{paciente_id}/compartir-email")
+def compartir_historia_profesional(paciente_id: int, req: CompartirHistoriaEmailRequest):
+    """
+    Envía por correo electrónico la historia médica, recetas e informes adjuntos de un paciente
+    a otro profesional de la salud.
+    """
+    paciente = crud.get_paciente(paciente_id)
+    if not paciente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Paciente con ID {paciente_id} no encontrado")
+
+    dest_email = (req.email_profesional or "").strip()
+    if not dest_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debe ingresar la dirección de correo del profesional destinatario.")
+
+    smtp_email = (req.smtp_email or "").strip()
+    smtp_pass = (req.smtp_password or "").strip()
+    if not smtp_email or not smtp_pass:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Por favor ingresá tu e-mail emisor y contraseña de aplicación de Gmail en Configuración."
+        )
+
+    config = crud.get_configuracion()
+    doc_emisor = config.get("doctor_nombre") or "Médico Emisor"
+    doc_esp = config.get("doctor_especialidad") or "Medicina General"
+    doc_mat = config.get("doctor_matricula") or "-"
+
+    nombre_destinatario = (req.nombre_profesional or "").strip() or "Colega Profesional"
+    
+    # Recolectar datos seleccionados
+    consultas_html = ""
+    if req.incluir_historia_clinica and paciente.get("consultas"):
+        consultas_list = sorted(paciente["consultas"], key=lambda c: c.get("fecha", ""), reverse=True)
+        items_html = ""
+        for c in consultas_list:
+            fecha_str = c.get("fecha", "")[:10] if c.get("fecha") else "Sin fecha"
+            motivo = c.get("motivo", "N/A")
+            diag = c.get("diagnostico", "N/A")
+            obs = c.get("observaciones", "")
+            tratam = c.get("tratamiento", "")
+
+            items_html += f"""
+            <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin-bottom: 8px;">
+                    <span style="font-weight: bold; color: #0f766e;">📅 Fecha: {fecha_str}</span>
+                    <span style="color: #64748b; font-size: 0.85rem;"><strong>Motivo:</strong> {motivo}</span>
+                </div>
+                <p style="margin: 4px 0;">🩺 <strong>Diagnóstico:</strong> {diag}</p>
+                {"<p style='margin: 4px 0; color: #475569;'>📝 <strong>Evolución / Observaciones:</strong> " + obs + "</p>" if obs else ""}
+                {"<p style='margin: 4px 0; color: #0284c7;'>💊 <strong>Tratamiento:</strong> " + tratam + "</p>" if tratam else ""}
+            </div>
+            """
+        consultas_html = f"""
+        <div style="margin-top: 25px;">
+            <h3 style="color: #0f766e; border-bottom: 2px solid #0f766e; padding-bottom: 6px; margin-bottom: 15px;">📋 Resumen de Historia Clínica y Consultas</h3>
+            {items_html if items_html else "<p style='color: #64748b;'>No hay consultas registradas.</p>"}
+        </div>
+        """
+
+    # Recetas seleccionadas
+    recetas_html = ""
+    if req.receta_ids and paciente.get("recetas"):
+        recetas_filtradas = [r for r in paciente["recetas"] if r.get("id") in req.receta_ids]
+        if recetas_filtradas:
+            r_items = ""
+            for r in recetas_filtradas:
+                f_str = r.get("fecha", "")[:10] if r.get("fecha") else ""
+                r_items += f"""
+                <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+                    <div style="font-weight: bold; color: #166534;">💊 Receta del {f_str}</div>
+                    <p style="margin: 4px 0; font-family: monospace; white-space: pre-wrap;">{r.get('medicamentos', '')}</p>
+                    {"<p style='margin: 4px 0; font-size: 0.85rem; color: #15803d;'><strong>Indicaciones:</strong> " + r.get('indicaciones', '') + "</p>" if r.get('indicaciones') else ""}
+                </div>
+                """
+            recetas_html = f"""
+            <div style="margin-top: 25px;">
+                <h3 style="color: #166534; border-bottom: 2px solid #166534; padding-bottom: 6px; margin-bottom: 15px;">💊 Prescripciones / Recetas Médicas</h3>
+                {r_items}
+            </div>
+            """
+
+    mensaje_bloque = ""
+    if req.mensaje_medico and req.mensaje_medico.strip():
+        mensaje_bloque = f"""
+        <div style="background-color: #fffbebfb; border-left: 4px solid #f59e0b; padding: 12px 15px; margin: 18px 0; border-radius: 4px;">
+            <strong style="color: #b45309;">💬 Nota / Mensaje del Dr. {doc_emisor}:</strong>
+            <p style="margin: 6px 0 0 0; color: #78350f;">{req.mensaje_medico.strip()}</p>
+        </div>
+        """
+
+    # Construir email HTML completo
+    import smtplib
+    import mimetypes
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.base import MIMEBase
+    from email import encoders
+
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = f"Historia Clínica Compartida - Paciente: {paciente.get('nombre', '')} {paciente.get('apellido', '')} (DNI: {paciente.get('dni', '')})"
+    msg["From"] = smtp_email
+    msg["To"] = dest_email
+
+    pac_nombre = f"{paciente.get('nombre', '')} {paciente.get('apellido', '')}"
+    pac_dni = paciente.get('dni', '-')
+    pac_nac = paciente.get('fecha_nacimiento', '-')
+    pac_tel = paciente.get('telefono', '-')
+    pac_obra = paciente.get('obra_social', '-')
+
+    html_content = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #334155;">
+        <div style="max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 30px; box-shadow: 0 4px 14px rgba(0,0,0,0.06);">
+          
+          <!-- Encabezado -->
+          <div style="border-bottom: 2px solid #0f766e; padding-bottom: 15px; margin-bottom: 20px;">
+            <h2 style="color: #0f766e; margin: 0; font-size: 1.5rem;">History-Ar Medical Cloud</h2>
+            <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">Interconsulta / Registro de Historia Clínica Compartida</p>
+          </div>
+
+          <p style="font-size: 1rem;">Estimado/a <strong>Dr/a. {nombre_destinatario}</strong>,</p>
+          <p style="color: #475569;">
+            Le remito a continuación la documentación médica e historia clínica del paciente <strong>{pac_nombre}</strong>, compartida por el/la <strong>Dr/a. {doc_emisor}</strong> ({doc_esp} - M.P. {doc_mat}).
+          </p>
+
+          {mensaje_bloque}
+
+          <!-- Datos del Paciente -->
+          <div style="background-color: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 8px; padding: 18px; margin: 20px 0;">
+            <h4 style="color: #0f766e; margin: 0 0 10px 0; font-size: 1.05rem;">👤 Datos del Paciente</h4>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+              <tr>
+                <td style="padding: 4px 0;"><strong>Nombre Completo:</strong> {pac_nombre}</td>
+                <td style="padding: 4px 0;"><strong>DNI:</strong> {pac_dni}</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0;"><strong>Fecha de Nacimiento:</strong> {pac_nac}</td>
+                <td style="padding: 4px 0;"><strong>Teléfono:</strong> {pac_tel}</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0;" colspan="2"><strong>Obra Social / Cobertura:</strong> {pac_obra}</td>
+              </tr>
+            </table>
+          </div>
+
+          {consultas_html}
+          {recetas_html}
+
+          <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 0.8rem; color: #94a3b8; text-align: center;">
+            <p style="margin: 2px 0;">Este mensaje contiene información confidencial protegida por el secreto profesional médico.</p>
+            <p style="margin: 2px 0;">Enviado a través de <strong>History-Ar Medical Suite</strong> por el Dr/a. {doc_emisor}.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+    """
+
+    body_part = MIMEText(html_content, "html")
+    msg.attach(body_part)
+
+    # Adjuntar archivos seleccionados
+    adjuntos_enviados = []
+    if req.documento_ids and paciente.get("documentos"):
+        docs_filtrados = [d for d in paciente["documentos"] if d.get("id") in req.documento_ids]
+        for doc in docs_filtrados:
+            ruta_rel = doc.get("ruta_archivo", "")
+            if not ruta_rel:
+                continue
+            filename = os.path.basename(ruta_rel)
+            file_path = os.path.join(uploads_dir, filename)
+            if os.path.exists(file_path):
+                try:
+                    ctype, encoding = mimetypes.guess_type(file_path)
+                    if ctype is None or encoding is not None:
+                        ctype = 'application/octet-stream'
+                    maintype, subtype = ctype.split('/', 1)
+
+                    with open(file_path, 'rb') as fp:
+                        attachment = MIMEBase(maintype, subtype)
+                        attachment.set_payload(fp.read())
+                    encoders.encode_base64(attachment)
+                    
+                    nombre_adjunto = doc.get("nombre") or filename
+                    ext_orig = os.path.splitext(filename)[1]
+                    if ext_orig and not nombre_adjunto.lower().endswith(ext_orig.lower()):
+                        nombre_adjunto += ext_orig
+
+                    attachment.add_header(
+                        'Content-Disposition',
+                        'attachment',
+                        filename=nombre_adjunto
+                    )
+                    msg.attach(attachment)
+                    adjuntos_enviados.append(nombre_adjunto)
+                except Exception as e:
+                    print(f"Error al adjuntar archivo {filename}: {e}")
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(smtp_email, smtp_pass)
+            server.sendmail(smtp_email, dest_email, msg.as_string())
+        
+        info_adjuntos = f" con {len(adjuntos_enviados)} archivo(s) adjunto(s)" if adjuntos_enviados else ""
+        return {"ok": True, "message": f"Historia clínica enviada exitosamente al Dr/a. {nombre_destinatario} ({dest_email}){info_adjuntos}."}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
