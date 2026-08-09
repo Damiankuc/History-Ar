@@ -1,0 +1,111 @@
+===============================================================================
+  EXPLICACIÓN PASO A PASO DEL SCRIPT DE SEGURIDAD (RLS) PARA SUPABASE
+  Proyecto: History-Ar (Sistema de Gestión Médica)
+===============================================================================
+
+Este script de base de datos en lenguaje SQL configura la "Seguridad a Nivel de Filas" 
+(Row Level Security o RLS) en Supabase PostgreSQL. 
+
+A continuación se detalla qué hace exactamente cada sección del código:
+
+
+-------------------------------------------------------------------------------
+1. ELIMINACIÓN DE LA CLAVE FORÁNEA ANTIGUA (DROP CONSTRAINT)
+-------------------------------------------------------------------------------
+  ALTER TABLE public.pacientes DROP CONSTRAINT IF EXISTS pacientes_usuario_id_fkey;
+
+  ¿Qué hace?: Remueve la regla de vinculación previa entre la tabla "pacientes" y la 
+  tabla antigua de "usuarios".
+  ¿Por qué es necesario?: La regla anterior exigía que la columna fuera un número (BIGINT). 
+  Para solucionar el error 42804 y pasar al sistema nativo de Supabase (UUID), debemos 
+  soltar esa regla antes de modificar la columna.
+
+
+-------------------------------------------------------------------------------
+2. CONVERSIÓN DE LA COLUMNA DE MÉDICO A UUID (ALTER COLUMN TYPE UUID)
+-------------------------------------------------------------------------------
+  ALTER TABLE public.pacientes 
+    ALTER COLUMN usuario_id TYPE UUID USING (...);
+
+  ¿Qué hace?: Modifica el tipo de datos de la columna "usuario_id" en la tabla pacientes,
+  transformándola de un número simple a un identificador único universal de Supabase (UUID).
+  ¿Por qué es necesario?: Supabase identifica a los médicos logueados usando códigos UUID 
+  únicos de 36 caracteres (ejemplo: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab').
+
+
+-------------------------------------------------------------------------------
+3. VINCULACIÓN DIRECTA CON EL SISTEMA DE AUTENTICACIÓN (FOREIGN KEY)
+-------------------------------------------------------------------------------
+  ALTER TABLE public.pacientes 
+    ADD CONSTRAINT pacientes_usuario_id_fkey 
+    FOREIGN KEY (usuario_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+  ¿Qué hace?: Enlaza la columna "usuario_id" de cada paciente directamente con la tabla 
+  oficial de usuarios autenticados de Supabase ("auth.users"). Si un médico borra su cuenta,
+  sus pacientes quedan marcados sin médico asignado en lugar de romper la base de datos.
+
+
+-------------------------------------------------------------------------------
+4. HABILITACIÓN DE RLS EN TODAS LAS TABLAS (ENABLE ROW LEVEL SECURITY)
+-------------------------------------------------------------------------------
+  ALTER TABLE public.pacientes ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.consultas ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.recetas ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.citas ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.documentos ENABLE ROW LEVEL SECURITY;
+
+  ¿Qué hace?: Activa el "escudo de seguridad por filas" en Supabase. A partir de este 
+  momento, NINGUNA persona puede leer ni escribir datos en estas tablas a menos que 
+  exista una política explícita que se lo permita.
+
+
+-------------------------------------------------------------------------------
+5. LIMPIEZA DE REGLAS PREVIAS (DROP POLICY)
+-------------------------------------------------------------------------------
+  DROP POLICY IF EXISTS "..." ON ...;
+
+  ¿Qué hace?: Elimina cualquier regla antigua o permiso universal anterior que pudiera 
+  haber quedado abierto durante la fase de desarrollo/pruebas. Garantiza que el sistema 
+  comience con una configuración limpia.
+
+
+-------------------------------------------------------------------------------
+6. CREACIÓN DE LAS POLÍTICAS DE SEGURIDAD DEFISIVAS (CREATE POLICY)
+-------------------------------------------------------------------------------
+
+  A) PERMISO DE AUTO-REGISTRO PÚBLICO (CÓDIGO QR EN SALA DE ESPERA):
+     CREATE POLICY "Permitir auto-registro publico por QR" 
+     ON public.pacientes FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+     ¿Qué hace?: Permite que cualquier paciente sin estar registrado (rol 'anon' desde su celular)
+     pueda CREAR (INSERT) su ficha al escanear el QR.
+     Seguridad: Solo permite INSERTAR. El paciente NUNCA podrá leer (SELECT), ver ni modificar 
+     los datos de ningún otro paciente del consultorio.
+
+
+  B) PRIVACIDAD TOTAL DE PACIENTES PARA EL MÉDICO:
+     CREATE POLICY "Medicos gestionan solo sus pacientes" 
+     ON public.pacientes FOR ALL TO authenticated 
+     USING (usuario_id = auth.uid()) WITH CHECK (usuario_id = auth.uid());
+
+     ¿Qué hace?: Compara el ID del médico conectado (auth.uid()) con el "usuario_id" guardado 
+     en cada paciente. Solo si coinciden exactamente, el médico podrá VER, EDITAR o BORRAR ese paciente.
+
+
+  C) PRIVACIDAD DE HISTORIAS CLÍNICAS, RECETAS, CITAS Y DOCUMENTOS:
+     CREATE POLICY "Medicos gestionan solo consultas de sus pacientes" 
+     ON public.consultas FOR ALL TO authenticated 
+     USING (paciente_id IN (SELECT id FROM public.pacientes WHERE usuario_id = auth.uid()));
+
+     ¿Qué hace?: Protege en cascada las historias clínicas (consultas), recetas emitidas, 
+     turnos agendados y estudios PDF/imágenes adjuntas. Un médico solo puede ver y editar 
+     estos documentos si pertenecen a un paciente asignado a su cuenta.
+
+
+===============================================================================
+  RESUMEN FINAL
+===============================================================================
+Este código transforma tu base de datos en un sistema médico seguro y compatible con 
+las normativas de protección de datos personales. Permite que los pacientes se registren
+por QR de forma rápida sin arriesgar la privacidad de la clínica, mientras asegura que 
+cada médico solo tenga acceso a la información confidencial de sus propios pacientes.
