@@ -1281,24 +1281,28 @@ function App() {
   // --- Vista Pública de Auto-Registro en Celulares por Código QR ---
   if (isPublicRegisterMode) {
     return (
-      <div className="public-register-bg" style={{ minHeight: "100vh", background: "linear-gradient(135deg, #eef2f7 0%, #e0f2fe 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1.5rem 1rem", fontFamily: "'Inter', system-ui, -apple-system, sans-serif", boxSizing: "content-box" }}>
-        <div className="public-register-card" style={{ background: "#ffffff", borderRadius: "20px", boxShadow: "0 12px 35px rgba(0, 0, 0, 0.08)", padding: "2.25rem 2rem", width: "95%", maxWidth: "540px", border: "1px solid rgba(226, 232, 240, 0.8)", boxSizing: "content-box", margin: "0 auto", overflow: "hidden" }}>
-          <div className="public-register-header" style={{ textAlign: "center", marginBottom: "1.75rem" }}>
-            <div style={{ fontSize: "2.5rem", marginBottom: "0.4rem" }}>🏥</div>
-            <h1 style={{ fontSize: "1.45rem", color: "#0f172a", marginBottom: "0.35rem", fontWeight: 700 }}>{configuracion.doctor_nombre || currentUsuario?.nombre || "Consultorio Médico"}</h1>
-            <p style={{ fontSize: "0.88rem", color: "#64748b", lineHeight: 1.4 }}>Registro de Pacientes para Ingreso a Sala de Espera</p>
+      <div className="public-register-bg">
+        <div className="public-register-card">
+          <div className="public-register-header">
+            <div className="public-header-icon">🏥</div>
+            <h1 className="public-header-title">
+              {configuracion.doctor_nombre || currentUsuario?.nombre || "Consultorio Médico"}
+            </h1>
+            <span className="public-header-subtitle">
+              Ingreso a Sala de Espera • Auto-Registro
+            </span>
           </div>
 
           {publicSuccess ? (
-            <div className="public-success-card" style={{ textAlign: "center", padding: "1rem 0" }}>
+            <div className="public-success-card" style={{ textAlign: "center", padding: "1.5rem 0" }}>
               <div className="public-success-icon" style={{ width: "72px", height: "72px", background: "#dcfce7", color: "#16a34a", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.5rem", margin: "0 auto 1.25rem auto" }}>✓</div>
-              <h2 style={{ fontSize: "1.25rem", color: "#15803d", marginBottom: "0.5rem", fontWeight: 700 }}>¡Registro Completado con Éxito!</h2>
-              <p style={{ fontSize: "0.9rem", color: "#475569", lineHeight: 1.5, marginBottom: "1.5rem" }}>
-                Tus datos fueron registrados correctamente en el sistema del consultorio. Por favor tomá asiento en la sala de espera, el profesional te llamará a la brevedad.
+              <h2 style={{ fontSize: "1.3rem", color: "#15803d", marginBottom: "0.5rem", fontWeight: 700 }}>¡Registro Completado con Éxito!</h2>
+              <p style={{ fontSize: "0.95rem", color: "#475569", lineHeight: 1.5, marginBottom: "1.75rem" }}>
+                Tus datos fueron registrados correctamente en la sala de espera. Por favor tomá asiento, el profesional te llamará a la brevedad.
               </p>
               <button 
                 className="btn btn-secondary" 
-                style={{ width: "100%", padding: "0.8rem", borderRadius: "10px", border: "1px solid #cbd5e1", background: "#f8fafc", color: "#334155", fontWeight: 600, cursor: "pointer" }}
+                style={{ width: "100%", padding: "0.85rem", borderRadius: "12px", border: "1.5px solid #cbd5e1", background: "#f8fafc", color: "#334155", fontWeight: 600, cursor: "pointer" }}
                 onClick={() => {
                   setPublicPaciente({
                     nombre: "", apellido: "", dni: "", fecha_nacimiento: "",
@@ -1315,29 +1319,29 @@ function App() {
           ) : (
             <form onSubmit={handlePublicRegisterPaciente}>
               {publicError && (
-                <div style={{ padding: "0.75rem", borderRadius: "8px", background: "rgba(239, 68, 68, 0.1)", color: "rgb(239, 68, 68)", border: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "0.85rem", marginBottom: "1rem" }}>
+                <div style={{ padding: "0.85rem 1rem", borderRadius: "12px", background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", fontSize: "0.88rem", marginBottom: "1.25rem", fontWeight: 500 }}>
                   ⚠️ {publicError}
                 </div>
               )}
 
-              {/* Fila 1: Nombre | Apellido */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", width: "100%", marginBottom: "0.85rem", boxSizing: "border-box" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>Nombre *</label>
+              {/* Sección 1: Datos Personales */}
+              <div className="public-form-grid">
+                <div className="public-field">
+                  <label className="public-label">Nombre <span>*</span></label>
                   <input
                     type="text"
-                    style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", background: "#0e1726", color: "#ffffff", border: "none", borderRadius: "10px", padding: "0.75rem 0.9rem", fontSize: "0.9rem", outline: "none" }}
+                    className="public-input"
                     placeholder="Ej. María"
                     value={publicPaciente.nombre}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, nombre: e.target.value })}
                     required
                   />
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>Apellido *</label>
+                <div className="public-field">
+                  <label className="public-label">Apellido <span>*</span></label>
                   <input
                     type="text"
-                    style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", background: "#0e1726", color: "#ffffff", border: "none", borderRadius: "10px", padding: "0.75rem 0.9rem", fontSize: "0.9rem", outline: "none" }}
+                    className="public-input"
                     placeholder="Ej. Gómez"
                     value={publicPaciente.apellido}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, apellido: e.target.value })}
@@ -1346,24 +1350,24 @@ function App() {
                 </div>
               </div>
 
-              {/* Fila 2: DNI | Fecha Nacimiento */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", width: "100%", marginBottom: "0.85rem", boxSizing: "border-box" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>DNI / Documento *</label>
+              {/* Sección 2: Documento y Fecha de Nacimiento */}
+              <div className="public-form-grid">
+                <div className="public-field">
+                  <label className="public-label">DNI / Documento <span>*</span></label>
                   <input
                     type="text"
-                    style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", background: "#0e1726", color: "#ffffff", border: "none", borderRadius: "10px", padding: "0.75rem 0.9rem", fontSize: "0.9rem", outline: "none" }}
-                    placeholder="Sin puntos"
+                    className="public-input"
+                    placeholder="Sin puntos (ej. 35123456)"
                     value={publicPaciente.dni}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, dni: e.target.value })}
                     required
                   />
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>Fecha Nac. *</label>
+                <div className="public-field">
+                  <label className="public-label">Fecha de Nacimiento <span>*</span></label>
                   <input
                     type="date"
-                    style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", background: "#0e1726", color: "#ffffff", border: "none", borderRadius: "10px", padding: "0.75rem 0.9rem", fontSize: "0.9rem", outline: "none", colorScheme: "dark" }}
+                    className="public-input"
                     value={publicPaciente.fecha_nacimiento}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, fecha_nacimiento: e.target.value })}
                     required
@@ -1371,23 +1375,23 @@ function App() {
                 </div>
               </div>
 
-              {/* Fila 3: Teléfono | Email */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", width: "100%", marginBottom: "0.85rem", boxSizing: "border-box" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>Teléfono / WhatsApp</label>
+              {/* Sección 3: Contacto */}
+              <div className="public-form-grid">
+                <div className="public-field">
+                  <label className="public-label">Teléfono / WhatsApp</label>
                   <input
                     type="text"
-                    style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", background: "#0e1726", color: "#ffffff", border: "none", borderRadius: "10px", padding: "0.75rem 0.9rem", fontSize: "0.9rem", outline: "none" }}
+                    className="public-input"
                     placeholder="Ej. 1123456789"
                     value={publicPaciente.telefono}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, telefono: e.target.value })}
                   />
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>Email</label>
+                <div className="public-field">
+                  <label className="public-label">Email</label>
                   <input
                     type="email"
-                    style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", background: "#0e1726", color: "#ffffff", border: "none", borderRadius: "10px", padding: "0.75rem 0.9rem", fontSize: "0.9rem", outline: "none" }}
+                    className="public-input"
                     placeholder="tu@email.com"
                     value={publicPaciente.email}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, email: e.target.value })}
@@ -1395,23 +1399,23 @@ function App() {
                 </div>
               </div>
 
-              {/* Fila 4: Obra Social | N° Afiliado */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", width: "100%", marginBottom: "0.85rem", boxSizing: "border-box" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>Obra Social / Cobertura</label>
+              {/* Sección 4: Cobertura Médica */}
+              <div className="public-form-grid">
+                <div className="public-field">
+                  <label className="public-label">Obra Social / Cobertura</label>
                   <input
                     type="text"
-                    style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", background: "#0e1726", color: "#ffffff", border: "none", borderRadius: "10px", padding: "0.75rem 0.9rem", fontSize: "0.9rem", outline: "none" }}
+                    className="public-input"
                     placeholder="Ej. OSDE, Particular"
                     value={publicPaciente.obra_social}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, obra_social: e.target.value })}
                   />
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>N° Afiliado</label>
+                <div className="public-field">
+                  <label className="public-label">N° de Afiliado</label>
                   <input
                     type="text"
-                    style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", background: "#0e1726", color: "#ffffff", border: "none", borderRadius: "10px", padding: "0.75rem 0.9rem", fontSize: "0.9rem", outline: "none" }}
+                    className="public-input"
                     placeholder="Opcional"
                     value={publicPaciente.numero_afiliado}
                     onChange={(e) => setPublicPaciente({ ...publicPaciente, numero_afiliado: e.target.value })}
@@ -1419,25 +1423,26 @@ function App() {
                 </div>
               </div>
 
-              {/* Fila 5: Motivo de consulta (Full Width) */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", width: "100%", marginBottom: "1.25rem", boxSizing: "border-box" }}>
-                <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>Motivo de Consulta / Antecedentes</label>
+              {/* Sección 5: Motivo de la Consulta */}
+              <div className="public-field" style={{ marginBottom: "1.5rem" }}>
+                <label className="public-label">Motivo de Consulta / Síntomas</label>
                 <textarea
                   rows={3}
-                  style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", background: "#0e1726", color: "#ffffff", border: "none", borderRadius: "10px", padding: "0.75rem 0.9rem", fontSize: "0.9rem", outline: "none", resize: "none" }}
-                  placeholder="Ej. Chequeo anual, dolor de garganta..."
+                  className="public-input"
+                  style={{ resize: "none" }}
+                  placeholder="Ej. Chequeo general, dolor de garganta, fiebre..."
                   value={publicPaciente.notas_generales}
                   onChange={(e) => setPublicPaciente({ ...publicPaciente, notas_generales: e.target.value })}
                 />
               </div>
 
-              {/* Fila 6: Botón Cyan Confirmar Registro */}
+              {/* Botón de Confirmación */}
               <button 
                 type="submit" 
-                style={{ width: "100%", background: "#00b8d4", color: "#ffffff", fontWeight: 700, fontSize: "1rem", borderRadius: "10px", padding: "0.85rem 1.5rem", border: "none", cursor: "pointer", boxShadow: "0 4px 12px rgba(0, 184, 212, 0.3)", marginTop: "0.25rem", transition: "all 0.2s ease" }} 
+                className="public-btn-submit"
                 disabled={publicSubmitting}
               >
-                {publicSubmitting ? "Registrando..." : "✅ Confirmar Registro"}
+                {publicSubmitting ? "Registrando en sala de espera..." : "✅ Confirmar Registro"}
               </button>
             </form>
           )}
