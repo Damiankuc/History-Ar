@@ -421,15 +421,57 @@ function App() {
           for (const file of publicFiles) {
             const formData = new FormData();
             formData.append("file", file);
-            await fetch(`${API_BASE_URL}/pacientes/${pacienteId}/documentos/subir`, {
+            let resUpload = await fetch(`${API_BASE_URL}/pacientes/${pacienteId}/documentos/subir`, {
               method: "POST",
               body: formData
             }).catch(() => null);
+
+            // Fallback si la app está en Vercel sin conexión directa al backend local
+            if (!resUpload || !resUpload.ok) {
+              const SUPABASE_URL = "https://qvutqqfsypzcfjhhzqsk.supabase.co";
+              const SUPABASE_KEY = "sb_publishable_KT61xj__yMLdxD37Wc5Teg_RFfQz6Rm";
+              const ext = file.name.split('.').pop() || "bin";
+              const uniquePath = `estudios/${pacienteId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+
+              // 1. Subir archivo a Supabase Storage bucket 'documentos'
+              const storageRes = await fetch(`${SUPABASE_URL}/storage/v1/object/documentos/${uniquePath}`, {
+                method: "POST",
+                headers: {
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Content-Type": file.type || "application/octet-stream",
+                  "x-upsert": "true"
+                },
+                body: file
+              }).catch(() => null);
+
+              const publicRuta = storageRes && storageRes.ok
+                ? `${SUPABASE_URL}/storage/v1/object/public/documentos/${uniquePath}`
+                : `storage://${uniquePath}`;
+
+              // 2. Registrar metadatos en la tabla public.documentos
+              await fetch(`${SUPABASE_URL}/rest/v1/documentos`, {
+                method: "POST",
+                headers: {
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Content-Type": "application/json",
+                  "Prefer": "return=minimal"
+                },
+                body: JSON.stringify({
+                  nombre: file.name,
+                  ruta_archivo: publicRuta,
+                  tipo_mimetype: file.type || "application/octet-stream",
+                  paciente_id: pacienteId
+                })
+              }).catch(() => null);
+            }
           }
         }
         setPublicFiles([]);
         setPublicFilesError("");
         setPublicSuccess(true);
+
       } else {
         const errData = await res.json().catch(() => ({}));
         if (errData.code === "23505" || (errData.message && errData.message.includes("unique constraint"))) {
