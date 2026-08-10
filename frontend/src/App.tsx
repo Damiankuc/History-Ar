@@ -329,6 +329,44 @@ function App() {
   const [publicSubmitting, setPublicSubmitting] = useState(false);
   const [publicSuccess, setPublicSuccess] = useState(false);
   const [publicError, setPublicError] = useState("");
+  const [publicFiles, setPublicFiles] = useState<File[]>([]);
+  const [publicFilesError, setPublicFilesError] = useState<string>("");
+
+  const handlePublicFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPublicFilesError("");
+    if (!e.target.files) return;
+    const selected = Array.from(e.target.files);
+    const newValidFiles: File[] = [];
+
+    for (const file of selected) {
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      const isAllowedExt = ["pdf", "jpg", "jpeg", "png", "webp", "heic", "dcm", "dicom", "doc", "docx"].includes(ext || "");
+      if (!isAllowedExt) {
+        setPublicFilesError(`El archivo '${file.name}' no tiene un formato permitido (PDF, JPG, PNG, WEBP, HEIC, DICOM, DOC/DOCX).`);
+        continue;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        setPublicFilesError(`El archivo '${file.name}' supera el tamaño máximo permitido de 25 MB.`);
+        continue;
+      }
+      newValidFiles.push(file);
+    }
+
+    setPublicFiles(prev => {
+      const combined = [...prev, ...newValidFiles];
+      if (combined.length > 5) {
+        setPublicFilesError("Se pueden adjuntar hasta 5 archivos por paciente.");
+        return combined.slice(0, 5);
+      }
+      return combined;
+    });
+    e.target.value = "";
+  };
+
+  const handleRemovePublicFile = (index: number) => {
+    setPublicFiles(prev => prev.filter((_, i) => i !== index));
+    setPublicFilesError("");
+  };
 
   // --- Estados de Código QR para Puerta de Consultorio ---
   const [qrBaseUrl, setQrBaseUrl] = useState(() => {
@@ -376,6 +414,21 @@ function App() {
       }
 
       if (res.ok) {
+        const createdData = await res.json().catch(() => null);
+        const pacienteId = Array.isArray(createdData) ? createdData[0]?.id : createdData?.id;
+
+        if (pacienteId && publicFiles.length > 0) {
+          for (const file of publicFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            await fetch(`${API_BASE_URL}/pacientes/${pacienteId}/documentos/subir`, {
+              method: "POST",
+              body: formData
+            }).catch(() => null);
+          }
+        }
+        setPublicFiles([]);
+        setPublicFilesError("");
         setPublicSuccess(true);
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -391,6 +444,7 @@ function App() {
       setPublicSubmitting(false);
     }
   };
+
 
   const handleTriggerPrintQrPoster = () => {
     setIsPrintingQrPoster(true);
@@ -832,6 +886,45 @@ function App() {
     }
   };
 
+  const [newPacienteFiles, setNewPacienteFiles] = useState<File[]>([]);
+  const [newPacienteFilesError, setNewPacienteFilesError] = useState<string>("");
+
+  const handleNewPacienteFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewPacienteFilesError("");
+    if (!e.target.files) return;
+    const selected = Array.from(e.target.files);
+    const newValidFiles: File[] = [];
+
+    for (const file of selected) {
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      const isAllowedExt = ["pdf", "jpg", "jpeg", "png", "webp", "heic", "dcm", "dicom", "doc", "docx"].includes(ext || "");
+      if (!isAllowedExt) {
+        setNewPacienteFilesError(`El archivo '${file.name}' no tiene un formato permitido.`);
+        continue;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        setNewPacienteFilesError(`El archivo '${file.name}' supera el tamaño máximo permitido de 25 MB.`);
+        continue;
+      }
+      newValidFiles.push(file);
+    }
+
+    setNewPacienteFiles(prev => {
+      const combined = [...prev, ...newValidFiles];
+      if (combined.length > 5) {
+        setNewPacienteFilesError("Se pueden adjuntar hasta 5 archivos por paciente.");
+        return combined.slice(0, 5);
+      }
+      return combined;
+    });
+    e.target.value = "";
+  };
+
+  const handleRemoveNewPacienteFile = (index: number) => {
+    setNewPacienteFiles(prev => prev.filter((_, i) => i !== index));
+    setNewPacienteFilesError("");
+  };
+
   // Crear Paciente
   const handleCreatePaciente = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -848,6 +941,20 @@ function App() {
       });
 
       if (res.ok) {
+        const createdPaciente = await res.json().catch(() => null);
+        const pacienteId = createdPaciente?.id;
+
+        if (pacienteId && newPacienteFiles.length > 0) {
+          for (const file of newPacienteFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            await fetch(`${API_BASE_URL}/pacientes/${pacienteId}/documentos/subir`, {
+              method: "POST",
+              body: formData
+            }).catch(() => null);
+          }
+        }
+
         alert("Paciente registrado con éxito");
         setNewPaciente({
           nombre: "",
@@ -861,6 +968,8 @@ function App() {
           numero_afiliado: "",
           notas_generales: ""
         });
+        setNewPacienteFiles([]);
+        setNewPacienteFilesError("");
         setActiveTab("pacientes");
         checkApiAndLoad();
       } else {
@@ -871,6 +980,7 @@ function App() {
       alert("Error de conexión al guardar el paciente");
     }
   };
+
 
   // Crear Consulta
   const handleCreateConsulta = async (e: React.FormEvent) => {
@@ -1298,7 +1408,7 @@ function App() {
               <div className="public-success-icon" style={{ width: "72px", height: "72px", background: "#dcfce7", color: "#16a34a", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.5rem", margin: "0 auto 1.25rem auto" }}>✓</div>
               <h2 style={{ fontSize: "1.3rem", color: "#15803d", marginBottom: "0.5rem", fontWeight: 700 }}>¡Registro Completado con Éxito!</h2>
               <p style={{ fontSize: "0.95rem", color: "#475569", lineHeight: 1.5, marginBottom: "1.75rem" }}>
-                Tus datos fueron registrados correctamente en la sala de espera. Por favor tomá asiento, el profesional te llamará a la brevedad.
+                Tus datos y estudios adjuntos fueron registrados correctamente en la sala de espera. Por favor tomá asiento, el profesional te llamará a la brevedad.
               </p>
               <button 
                 className="btn btn-secondary" 
@@ -1309,6 +1419,8 @@ function App() {
                     telefono: "", email: "", direccion: "", obra_social: "",
                     numero_afiliado: "", notas_generales: ""
                   });
+                  setPublicFiles([]);
+                  setPublicFilesError("");
                   setPublicSuccess(false);
                   setPublicError("");
                 }}
@@ -1436,13 +1548,108 @@ function App() {
                 />
               </div>
 
+              {/* Sección 6: Adjuntar Estudios o Documentos Relevantes */}
+              <div className="public-field" style={{ marginBottom: "1.5rem" }}>
+                <label className="public-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>📁 Adjuntar Estudios o Análisis <i>(Opcional)</i></span>
+                  <span style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 400 }}>Máx. 5 archivos • 25 MB c/u</span>
+                </label>
+                <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "-0.2rem 0 0.75rem 0", lineHeight: 1.4 }}>
+                  Podés adjuntar estudios previos en PDF, análisis de laboratorio, radiografías o fotos de estudios médicos.
+                </p>
+
+                {publicFilesError && (
+                  <div style={{ padding: "0.6rem 0.85rem", borderRadius: "10px", background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", fontSize: "0.82rem", marginBottom: "0.85rem" }}>
+                    ⚠️ {publicFilesError}
+                  </div>
+                )}
+
+                <div 
+                  className="public-file-dropzone"
+                  style={{
+                    border: "2px dashed #cbd5e1",
+                    borderRadius: "14px",
+                    padding: "1.25rem 1rem",
+                    textAlign: "center",
+                    background: "#f8fafc",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease"
+                  }}
+                  onClick={() => document.getElementById("public-file-input")?.click()}
+                >
+                  <input
+                    id="public-file-input"
+                    type="file"
+                    multiple
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.dcm,.dicom,.doc,.docx"
+                    style={{ display: "none" }}
+                    onChange={handlePublicFileSelect}
+                  />
+                  <div style={{ fontSize: "1.8rem", marginBottom: "0.3rem" }}>📎</div>
+                  <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#334155" }}>
+                    Tocá acá para seleccionar archivos o fotos
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#94a3b8", marginTop: "0.25rem" }}>
+                    PDFs, Fotos, Escaneos (hasta 25 MB por archivo)
+                  </div>
+                </div>
+
+                {publicFiles.length > 0 && (
+                  <div style={{ marginTop: "0.85rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                    {publicFiles.map((file, idx) => (
+                      <div 
+                        key={idx} 
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "0.65rem 0.85rem",
+                          borderRadius: "10px",
+                          background: "#ffffff",
+                          border: "1px solid #e2e8f0",
+                          fontSize: "0.85rem"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", overflow: "hidden" }}>
+                          <span>{file.type.includes("pdf") ? "📄" : "🖼️"}</span>
+                          <span style={{ fontWeight: 500, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "180px" }}>
+                            {file.name}
+                          </span>
+                          <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                            ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemovePublicFile(idx);
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            fontSize: "1rem",
+                            padding: "0.2rem 0.4rem"
+                          }}
+                          title="Quitar archivo"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Botón de Confirmación */}
               <button 
                 type="submit" 
                 className="public-btn-submit"
                 disabled={publicSubmitting}
               >
-                {publicSubmitting ? "Registrando en sala de espera..." : "✅ Confirmar Registro"}
+                {publicSubmitting ? "Registrando y subiendo archivos..." : "✅ Confirmar Registro"}
               </button>
             </form>
           )}
@@ -1450,6 +1657,7 @@ function App() {
       </div>
     );
   }
+
 
   // --- Pantalla de verificación / login ---
   if (appState === "checking") {
@@ -2694,6 +2902,92 @@ function App() {
                   />
                 </div>
 
+                {/* Adjuntar Archivos Iniciales */}
+                <div className="form-group">
+                  <label className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>📁 Adjuntar Estudios o Documentos Iniciales (Opcional)</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 400 }}>Máx. 5 archivos • 25 MB c/u</span>
+                  </label>
+
+                  {newPacienteFilesError && (
+                    <div style={{ padding: "0.5rem 0.75rem", borderRadius: "8px", background: "#fef2f2", color: "#b91c1c", fontSize: "0.82rem", marginBottom: "0.5rem" }}>
+                      ⚠️ {newPacienteFilesError}
+                    </div>
+                  )}
+
+                  <div 
+                    style={{
+                      border: "2px dashed var(--border-color)",
+                      borderRadius: "8px",
+                      padding: "1rem",
+                      textAlign: "center",
+                      backgroundColor: "var(--bg-card)",
+                      cursor: "pointer"
+                    }}
+                    onClick={() => document.getElementById("new-paciente-file-input")?.click()}
+                  >
+                    <input
+                      id="new-paciente-file-input"
+                      type="file"
+                      multiple
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.dcm,.dicom,.doc,.docx"
+                      style={{ display: "none" }}
+                      onChange={handleNewPacienteFileSelect}
+                    />
+                    <div style={{ fontSize: "1.5rem", marginBottom: "0.2rem" }}>📎</div>
+                    <div style={{ fontSize: "0.88rem", fontWeight: 600 }}>Seleccionar o arrastrar archivos de estudios</div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                      PDFs, Fotografías de estudios, análisis de laboratorio, escaneos
+                    </div>
+                  </div>
+
+                  {newPacienteFiles.length > 0 && (
+                    <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                      {newPacienteFiles.map((file, idx) => (
+                        <div 
+                          key={idx} 
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "0.5rem 0.75rem",
+                            borderRadius: "6px",
+                            background: "var(--bg-secondary, #f1f5f9)",
+                            fontSize: "0.85rem"
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", overflow: "hidden" }}>
+                            <span>{file.type.includes("pdf") ? "📄" : "🖼️"}</span>
+                            <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "240px" }}>
+                              {file.name}
+                            </span>
+                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                              ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveNewPacienteFile(idx);
+                            }}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "#ef4444",
+                              cursor: "pointer",
+                              fontSize: "0.95rem"
+                            }}
+                            title="Quitar archivo"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
                   <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setActiveTab("pacientes")}>
                     Cancelar
@@ -2702,6 +2996,7 @@ function App() {
                     Guardar Ficha del Paciente
                   </button>
                 </div>
+
               </form>
             </div>
           </div>

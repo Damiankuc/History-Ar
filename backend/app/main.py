@@ -266,12 +266,33 @@ def subir_documento(
     consulta_id: Optional[int] = None,
     file: UploadFile = File(...)
 ):
-    """Sube un archivo médico adjunto y guarda la metadata en Supabase."""
+    """Sube un archivo médico adjunto (PDF, foto, escaneo) y guarda la metadata en Supabase."""
     db_paciente = crud.get_paciente(paciente_id=paciente_id)
     if not db_paciente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Paciente ID {paciente_id} no existe")
-        
-    file_extension = os.path.splitext(file.filename)[1] if file.filename else ""
+
+    # Validar extensión permitida
+    allowed_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".heic", ".dcm", ".dicom", ".doc", ".docx"}
+    file_extension = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    
+    if file_extension not in allowed_extensions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Tipo de archivo '{file_extension}' no permitido. Formatos aceptados: PDF, JPG, PNG, WEBP, HEIC, DICOM, DOC/DOCX."
+        )
+
+    # Validar tamaño máximo (25 MB)
+    MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB en bytes
+    file.file.seek(0, os.SEEK_END)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El archivo excede el tamaño máximo permitido de 25 MB ({file_size / (1024*1024):.1f} MB)."
+        )
+
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = os.path.join(uploads_dir, unique_filename)
 
@@ -289,6 +310,7 @@ def subir_documento(
         paciente_id=paciente_id,
         consulta_id=consulta_id
     )
+
 
 @app.post("/api/pacientes/{paciente_id}/documentos/escanear", response_model=DocumentoRead, status_code=status.HTTP_201_CREATED)
 def escanear_documento(paciente_id: int, consulta_id: Optional[int] = None):

@@ -154,6 +154,17 @@ def test_upload_and_delete_documento(client: TestClient):
     res_history2 = client.get(f"/api/pacientes/{paciente_id}")
     assert len(res_history2.json()["documentos"]) == 0
 
+def test_upload_invalid_file_type(client: TestClient):
+    res_paciente = client.post("/api/pacientes", json={"nombre": "Pedro", "apellido": "García", "dni": "888", "fecha_nacimiento": "1990-01-01"})
+    paciente_id = res_paciente.json()["id"]
+
+    # Intentar subir ejecutable no permitido
+    bad_file = {"file": ("malware.exe", b"exe binary content", "application/x-msdownload")}
+    res_bad = client.post(f"/api/pacientes/{paciente_id}/documentos/subir", files=bad_file)
+    assert res_bad.status_code == 400
+    assert "no permitido" in res_bad.json()["detail"].lower()
+
+
 def test_configuracion_medica(client: TestClient):
     # 1. Obtener config por defecto
     res = client.get("/api/configuracion")

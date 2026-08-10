@@ -3,32 +3,7 @@
 -- Copiar y ejecutar este script en el SQL Editor de Supabase
 -- ========================================================
 
--- 1. Eliminar la restricción de clave foránea previa si existía con BIGINT
-ALTER TABLE public.pacientes DROP CONSTRAINT IF EXISTS pacientes_usuario_id_fkey;
-
--- 2. Convertir la columna usuario_id a tipo UUID
-ALTER TABLE public.pacientes 
-  ALTER COLUMN usuario_id TYPE UUID USING (
-    CASE 
-      WHEN usuario_id IS NULL THEN NULL 
-      WHEN usuario_id::text ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN usuario_id::text::uuid 
-      ELSE NULL 
-    END
-  );
-
--- 3. (Opcional) Vincular usuario_id directamente a la tabla auth.users nativa de Supabase
-ALTER TABLE public.pacientes 
-  ADD CONSTRAINT pacientes_usuario_id_fkey 
-  FOREIGN KEY (usuario_id) REFERENCES auth.users(id) ON DELETE SET NULL;
-
--- 4. Habilitar Row Level Security (RLS) en todas las tablas
-ALTER TABLE public.pacientes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.consultas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.recetas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.citas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.documentos ENABLE ROW LEVEL SECURITY;
-
--- 5. Eliminar políticas antiguas para evitar duplicados
+-- 1. Eliminar primero todas las políticas existentes para permitir modificar columnas
 DROP POLICY IF EXISTS "Allow anon all on pacientes" ON public.pacientes;
 DROP POLICY IF EXISTS "Allow anon all on consultas" ON public.consultas;
 DROP POLICY IF EXISTS "Allow anon all on recetas" ON public.recetas;
@@ -41,6 +16,32 @@ DROP POLICY IF EXISTS "Medicos gestionan solo consultas de sus pacientes" ON pub
 DROP POLICY IF EXISTS "Medicos gestionan solo recetas de sus pacientes" ON public.recetas;
 DROP POLICY IF EXISTS "Medicos gestionan solo citas de sus pacientes" ON public.citas;
 DROP POLICY IF EXISTS "Medicos gestionan solo documentos de sus pacientes" ON public.documentos;
+DROP POLICY IF EXISTS "Permitir auto-registro publico de documentos por QR" ON public.documentos;
+
+-- 2. Eliminar la restricción de clave foránea previa si existía con BIGINT
+ALTER TABLE public.pacientes DROP CONSTRAINT IF EXISTS pacientes_usuario_id_fkey;
+
+-- 3. Convertir la columna usuario_id a tipo UUID
+ALTER TABLE public.pacientes 
+  ALTER COLUMN usuario_id TYPE UUID USING (
+    CASE 
+      WHEN usuario_id IS NULL THEN NULL 
+      WHEN usuario_id::text ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN usuario_id::text::uuid 
+      ELSE NULL 
+    END
+  );
+
+-- 4. (Opcional) Vincular usuario_id directamente a la tabla auth.users nativa de Supabase
+ALTER TABLE public.pacientes 
+  ADD CONSTRAINT pacientes_usuario_id_fkey 
+  FOREIGN KEY (usuario_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+-- 5. Habilitar Row Level Security (RLS) en todas las tablas
+ALTER TABLE public.pacientes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.consultas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recetas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.citas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.documentos ENABLE ROW LEVEL SECURITY;
 
 -- 6. Crear Políticas RLS puras de UUID (directas con auth.uid())
 
@@ -99,6 +100,14 @@ USING (
 );
 
 -- E. TABLA DOCUMENTOS ADJUNTOS
+-- Permite que los pacientes adjunten documentos/estudios al auto-registrarse por QR
+CREATE POLICY "Permitir auto-registro publico de documentos por QR" 
+ON public.documentos 
+FOR INSERT 
+TO anon, authenticated 
+WITH CHECK (true);
+
+-- Médicos autenticados gestionan documentos de sus pacientes
 CREATE POLICY "Medicos gestionan solo documentos de sus pacientes" 
 ON public.documentos 
 FOR ALL 
