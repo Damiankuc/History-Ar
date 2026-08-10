@@ -2597,8 +2597,15 @@ function App() {
                           ) : (
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
                               {selectedPaciente.documentos.map((doc) => {
-                                const fileUrl = `${FILE_BASE_URL}${doc.ruta_archivo}`;
+                                const rawRuta = doc.ruta_archivo || "";
+                                let fileUrl = rawRuta;
+                                if (rawRuta.startsWith("storage://")) {
+                                  fileUrl = `https://qvutqqfsypzcfjhhzqsk.supabase.co/storage/v1/object/public/documentos/${rawRuta.replace("storage://", "")}`;
+                                } else if (!rawRuta.startsWith("http://") && !rawRuta.startsWith("https://")) {
+                                  fileUrl = `${FILE_BASE_URL}${rawRuta.startsWith("/") ? "" : "/"}${rawRuta}`;
+                                }
                                 const isImage = doc.tipo_mimetype.startsWith("image/");
+
                                 
                                 return (
                                   <div key={doc.id} className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "1rem" }}>
