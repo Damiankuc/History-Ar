@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { BuscadorMedicamentos } from "./BuscadorMedicamentos";
 import "./App.css";
+
 
 interface Consulta {
   id: number;
@@ -2340,6 +2342,18 @@ function App() {
                                 required
                               />
                             </div>
+
+                            <BuscadorMedicamentos
+                              apiBaseUrl={API_BASE_URL}
+                              targetNombre="Tratamiento de la Consulta"
+                              onInsertarMedicamento={(lineaText) => {
+                                setNewConsulta((prev) => ({
+                                  ...prev,
+                                  tratamiento: prev.tratamiento ? `${prev.tratamiento}\n${lineaText}` : lineaText
+                                }));
+                              }}
+                            />
+
                             <div className="form-group">
                               <label className="form-label">Tratamiento / Receta *</label>
                               <textarea
@@ -2657,6 +2671,16 @@ function App() {
                         <div className="card">
                           <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Emitir Nueva Receta</h3>
                           <form onSubmit={handleCreateReceta}>
+                            <BuscadorMedicamentos
+                              apiBaseUrl={API_BASE_URL}
+                              targetNombre="la Receta"
+                              onInsertarMedicamento={(lineaText) => {
+                                setNewReceta((prev) => ({
+                                  ...prev,
+                                  medicamentos: prev.medicamentos ? `${prev.medicamentos}\n${lineaText}` : lineaText
+                                }));
+                              }}
+                            />
                             <div className="form-group">
                               <label className="form-label">Medicamentos y Posología *</label>
                               <textarea

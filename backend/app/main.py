@@ -44,11 +44,18 @@ from schemas import (
     CitaReadConPaciente,
     AuthEstadoRead,
     EnviarEmailRequest,
-    CompartirHistoriaEmailRequest
+    CompartirHistoriaEmailRequest,
+    MedicamentoRead,
+    MedicamentoCustomCreate
 )
+from models import MedicamentoCustom
+from vademecum_data import VADEMECUM_BASE
+from database import engine
+from sqlmodel import Session, select
 import crud
 import scanner
 from supabase_client import get_supabase
+
 
 def kill_other_instances():
     """Mata instancias previas colgadas de History-Ar.exe en segundo plano."""
@@ -919,7 +926,119 @@ def compartir_historia_profesional(paciente_id: int, req: CompartirHistoriaEmail
             detail=f"No se pudo enviar el correo vía Gmail: {str(e)}"
         )
 
+# --- Endpoints Vademécum & Búsqueda de Medicamentos ---
+
+@app.get("/api/medicamentos/buscar", response_model=List[MedicamentoRead])
+def buscar_medicamentos(q: Optional[str] = None):
+    results = []
+    query_str = (q or "").strip().lower()
+    
+    # 1. Búsqueda en Vademécum Base
+    for med in VADEMECUM_BASE:
+        nombre = med["nombre_comercial"].lower()
+        monodroga = (med.get("monodroga") or "").lower()
+        if not query_str or query_str in nombre or query_str in monodroga:
+            results.append(MedicamentoRead(
+                id=med.get("id"),
+                nombre_comercial=med["nombre_comercial"],
+                monodroga=med.get("monodroga"),
+                presentacion=med.get("presentacion"),
+                dosis_sugerida=med.get("dosis_sugerida"),
+                es_custom=False
+            ))
+            if len(results) >= 40:
+                break
+
+    # 2. Búsqueda en Medicamentos Personalizados (Supabase con fallback a SQLite local)
+    try:
+        supabase = get_supabase()
+        sb_query = supabase.table("medicamentos_custom").select("*")
+        if query_str:
+            search = f"%{query_str}%"
+            sb_query = sb_query.or_(f"nombre_comercial.ilike.{search},monodroga.ilike.{search}")
+        sb_res = sb_query.limit(20).execute()
+        if sb_res.data:
+            for cm in sb_res.data:
+                results.insert(0, MedicamentoRead(
+                    id=cm.get("id"),
+                    nombre_comercial=cm.get("nombre_comercial"),
+                    monodroga=cm.get("monodroga"),
+                    presentacion=cm.get("presentacion"),
+                    dosis_sugerida=cm.get("dosis_sugerida"),
+                    es_custom=True
+                ))
+    except Exception:
+        # Fallback a SQLite local si Supabase no está disponible o la tabla no existe aún
+        try:
+            with Session(engine) as session:
+                stmt = select(MedicamentoCustom)
+                if query_str:
+                    stmt = stmt.where(
+                        (MedicamentoCustom.nombre_comercial.ilike(f"%{query_str}%")) |
+                        (MedicamentoCustom.monodroga.ilike(f"%{query_str}%"))
+                    )
+                custom_meds = session.exec(stmt.limit(20)).all()
+                for cm in custom_meds:
+                    results.insert(0, MedicamentoRead(
+                        id=cm.id,
+                        nombre_comercial=cm.nombre_comercial,
+                        monodroga=cm.monodroga,
+                        presentacion=cm.presentacion,
+                        dosis_sugerida=cm.dosis_sugerida,
+                        es_custom=True
+                    ))
+        except Exception as e_sql:
+            print(f"Error al buscar medicamentos custom: {e_sql}")
+
+    return results
+
+@app.post("/api/medicamentos/custom", response_model=MedicamentoRead)
+def crear_medicamento_custom(med_in: MedicamentoCustomCreate):
+    data_dict = {
+        "nombre_comercial": med_in.nombre_comercial.strip(),
+        "monodroga": med_in.monodroga.strip() if med_in.monodroga else None,
+        "presentacion": med_in.presentacion.strip() if med_in.presentacion else None,
+        "dosis_sugerida": med_in.dosis_sugerida.strip() if med_in.dosis_sugerida else None
+    }
+    
+    # 1. Intentar guardar en Supabase si está disponible
+    try:
+        supabase = get_supabase()
+        res = supabase.table("medicamentos_custom").insert(data_dict).execute()
+        if res.data and len(res.data) > 0:
+            created = res.data[0]
+            return MedicamentoRead(
+                id=created.get("id"),
+                nombre_comercial=created.get("nombre_comercial"),
+                monodroga=created.get("monodroga"),
+                presentacion=created.get("presentacion"),
+                dosis_sugerida=created.get("dosis_sugerida"),
+                es_custom=True
+            )
+    except Exception:
+        pass
+
+    # 2. Guardar en SQLite local como respaldo
+    try:
+        with Session(engine) as session:
+            nuevo = MedicamentoCustom(**data_dict)
+            session.add(nuevo)
+            session.commit()
+            session.refresh(nuevo)
+            return MedicamentoRead(
+                id=nuevo.id,
+                nombre_comercial=nuevo.nombre_comercial,
+                monodroga=nuevo.monodroga,
+                presentacion=nuevo.presentacion,
+                dosis_sugerida=nuevo.dosis_sugerida,
+                es_custom=True
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al guardar medicamento personalizado: {str(e)}")
+
+
 # Servir frontend estático si existe
+
 base_path = sys._MEIPASS if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS') else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 static_dir = os.path.join(base_path, "static")
 if os.path.exists(static_dir):

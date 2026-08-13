@@ -91,3 +91,12 @@ class Cita(SQLModel, table=True):
     
     paciente_id: int = Field(foreign_key="paciente.id")
     paciente: Paciente = Relationship(back_populates="citas")
+
+class MedicamentoCustom(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    nombre_comercial: str = Field(index=True)
+    monodroga: Optional[str] = Field(default=None, index=True)
+    presentacion: Optional[str] = None
+    dosis_sugerida: Optional[str] = None
+    fecha_creacion: datetime = Field(default_factory=datetime.utcnow)
+

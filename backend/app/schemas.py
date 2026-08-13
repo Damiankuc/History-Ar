@@ -160,4 +160,21 @@ class CompartirHistoriaEmailRequest(BaseModel):
     smtp_email: Optional[str] = None
     smtp_password: Optional[str] = None
 
+# --- Esquemas para Vademécum y Medicamentos ---
+
+class MedicamentoRead(BaseModel):
+    id: Optional[int] = None
+    nombre_comercial: str
+    monodroga: Optional[str] = None
+    presentacion: Optional[str] = None
+    dosis_sugerida: Optional[str] = None
+    es_custom: bool = False
+
+class MedicamentoCustomCreate(BaseModel):
+    nombre_comercial: str
+    monodroga: Optional[str] = None
+    presentacion: Optional[str] = None
+    dosis_sugerida: Optional[str] = None
+
+
 
