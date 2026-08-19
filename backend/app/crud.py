@@ -2,6 +2,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import bcrypt
 from supabase_client import get_supabase, get_supabase_for_user
+from crypto_utils import encrypt_field, decrypt_field
+from audit import log_audit_event
 from schemas import (
     UsuarioRegister, UsuarioLogin, UsuarioRead,
     PacienteCreate, PacienteRead, PacienteReadConConsultas,
@@ -12,7 +14,53 @@ from schemas import (
     CitaCreate, CitaRead, CitaReadConPaciente
 )
 
+def _decrypt_paciente(paciente: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not paciente:
+        return paciente
+    if paciente.get("dni"):
+        paciente["dni"] = decrypt_field(paciente["dni"])
+    if paciente.get("notas_generales"):
+        paciente["notas_generales"] = decrypt_field(paciente["notas_generales"])
+    if paciente.get("antecedentes_medicos"):
+        paciente["antecedentes_medicos"] = decrypt_field(paciente["antecedentes_medicos"])
+    if paciente.get("antecedentes_familiares"):
+        paciente["antecedentes_familiares"] = decrypt_field(paciente["antecedentes_familiares"])
+    return paciente
+
+def _encrypt_paciente_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    if "dni" in data and data["dni"]:
+        data["dni"] = encrypt_field(data["dni"])
+    if "notas_generales" in data and data["notas_generales"]:
+        data["notas_generales"] = encrypt_field(data["notas_generales"])
+    if "antecedentes_medicos" in data and data["antecedentes_medicos"]:
+        data["antecedentes_medicos"] = encrypt_field(data["antecedentes_medicos"])
+    if "antecedentes_familiares" in data and data["antecedentes_familiares"]:
+        data["antecedentes_familiares"] = encrypt_field(data["antecedentes_familiares"])
+    return data
+
+def _decrypt_consulta(consulta: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not consulta:
+        return consulta
+    if consulta.get("subjetivo_motivo"):
+        consulta["subjetivo_motivo"] = decrypt_field(consulta["subjetivo_motivo"])
+    if consulta.get("diagnostico"):
+        consulta["diagnostico"] = decrypt_field(consulta["diagnostico"])
+    if consulta.get("plan_tratamiento"):
+        consulta["plan_tratamiento"] = decrypt_field(consulta["plan_tratamiento"])
+    return consulta
+
+def _encrypt_consulta_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    if "subjetivo_motivo" in data and data["subjetivo_motivo"]:
+        data["subjetivo_motivo"] = encrypt_field(data["subjetivo_motivo"])
+    if "diagnostico" in data and data["diagnostico"]:
+        data["diagnostico"] = encrypt_field(data["diagnostico"])
+    if "plan_tratamiento" in data and data["plan_tratamiento"]:
+        data["plan_tratamiento"] = encrypt_field(data["plan_tratamiento"])
+    return data
+
 def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 def _check_password(password: str, hashed: str) -> bool:
@@ -104,14 +152,15 @@ def get_pacientes(skip: int = 0, limit: int = 100, q: Optional[str] = None, toke
     
     query = query.order("apellido").order("nombre").range(skip, skip + limit - 1)
     res = query.execute()
-    return res.data or []
+    pacientes = res.data or []
+    return [_decrypt_paciente(p) for p in pacientes]
 
 
 def get_paciente(paciente_id: int) -> Optional[Dict[str, Any]]:
     supabase = get_supabase()
     res = supabase.table("pacientes").select("*").eq("id", paciente_id).execute()
     if res.data and len(res.data) > 0:
-        paciente = res.data[0]
+        paciente = _decrypt_paciente(res.data[0])
         # Cargar relaciones completas (consultas, documentos, recetas, citas)
         consultas = get_consultas_por_paciente(paciente_id)
         documentos = get_documentos_por_paciente(paciente_id)
@@ -122,58 +171,75 @@ def get_paciente(paciente_id: int) -> Optional[Dict[str, Any]]:
         paciente["documentos"] = documentos
         paciente["recetas"] = recetas
         paciente["citas"] = citas
+        log_audit_event(accion="LECTURA_HISTORIA_CLINICA", paciente_id=paciente_id, detalle=f"Lectura completa de historia clínica de paciente ID {paciente_id}")
         return paciente
     return None
 
 def get_paciente_by_dni(dni: str) -> Optional[Dict[str, Any]]:
     supabase = get_supabase()
-    res = supabase.table("pacientes").select("*").eq("dni", dni.strip()).execute()
+    encrypted_dni = encrypt_field(dni.strip())
+    # Buscar por DNI plano o DNI cifrado
+    res = supabase.table("pacientes").select("*").or_(f"dni.eq.{dni.strip()},dni.eq.{encrypted_dni}").execute()
     if res.data and len(res.data) > 0:
-        return res.data[0]
+        return _decrypt_paciente(res.data[0])
     return None
 
 def create_paciente(paciente_in: PacienteCreate) -> Dict[str, Any]:
     supabase = get_supabase()
     data = paciente_in.model_dump(exclude_unset=True)
+    _encrypt_paciente_data(data)
     res = supabase.table("pacientes").insert(data).execute()
     if res.data and len(res.data) > 0:
-        return res.data[0]
+        paciente = _decrypt_paciente(res.data[0])
+        log_audit_event(accion="CREACION_PACIENTE", paciente_id=paciente["id"], detalle=f"Creación de nuevo paciente ID {paciente['id']}")
+        return paciente
     raise Exception("No se pudo crear el paciente en Supabase")
 
 def update_paciente(paciente_id: int, paciente_update: PacienteCreate) -> Optional[Dict[str, Any]]:
     supabase = get_supabase()
     data = paciente_update.model_dump(exclude_unset=True)
+    _encrypt_paciente_data(data)
     res = supabase.table("pacientes").update(data).eq("id", paciente_id).execute()
     if res.data and len(res.data) > 0:
-        return res.data[0]
+        paciente = _decrypt_paciente(res.data[0])
+        log_audit_event(accion="MODIFICACION_PACIENTE", paciente_id=paciente_id, detalle=f"Modificación de paciente ID {paciente_id}")
+        return paciente
     return None
 
 def delete_paciente(paciente_id: int) -> bool:
     supabase = get_supabase()
     res = supabase.table("pacientes").delete().eq("id", paciente_id).execute()
-    return bool(res.data)
+    if bool(res.data):
+        log_audit_event(accion="ELIMINACION_PACIENTE", paciente_id=paciente_id, detalle=f"Eliminación de ficha de paciente ID {paciente_id}")
+        return True
+    return False
 
 # --- CRUD Consultas (Historias Médicas / Padecimientos) ---
 
 def create_consulta(consulta_in: ConsultaCreate) -> Dict[str, Any]:
     supabase = get_supabase()
     data = consulta_in.model_dump(exclude_unset=True)
+    _encrypt_consulta_data(data)
     res = supabase.table("consultas").insert(data).execute()
     if res.data and len(res.data) > 0:
-        return res.data[0]
+        consulta = _decrypt_consulta(res.data[0])
+        log_audit_event(accion="CREACION_CONSULTA", paciente_id=consulta.get("paciente_id"), detalle=f"Registro de consulta médica ID {consulta.get('id')}")
+        return consulta
     raise Exception("No se pudo registrar la consulta médica")
 
 def get_consulta(consulta_id: int) -> Optional[Dict[str, Any]]:
     supabase = get_supabase()
     res = supabase.table("consultas").select("*").eq("id", consulta_id).execute()
     if res.data and len(res.data) > 0:
-        return res.data[0]
+        return _decrypt_consulta(res.data[0])
     return None
 
 def get_consultas_por_paciente(paciente_id: int) -> List[Dict[str, Any]]:
     supabase = get_supabase()
     res = supabase.table("consultas").select("*").eq("paciente_id", paciente_id).order("fecha", desc=True).execute()
-    return res.data or []
+    consultas = res.data or []
+    return [_decrypt_consulta(c) for c in consultas]
+
 
 # --- CRUD Documentos ---
 

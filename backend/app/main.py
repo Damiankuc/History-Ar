@@ -338,10 +338,6 @@ def subir_documento(
     file: UploadFile = File(...)
 ):
     """Sube un archivo médico adjunto (PDF, foto, escaneo) y guarda la metadata en Supabase."""
-    db_paciente = crud.get_paciente(paciente_id=paciente_id)
-    if not db_paciente:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Paciente ID {paciente_id} no existe")
-
     # Sanitizar nombre original y extensión permitida
     raw_filename = os.path.basename(file.filename) if file.filename else "documento_adjunto"
     allowed_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".heic", ".dcm", ".dicom", ".doc", ".docx"}
@@ -371,6 +367,11 @@ def subir_documento(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"El contenido binario del archivo no coincide con una firma válida para la extensión '{file_extension}'."
         )
+
+    db_paciente = crud.get_paciente(paciente_id=paciente_id)
+    if not db_paciente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Paciente ID {paciente_id} no existe")
+
 
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = os.path.join(uploads_dir, unique_filename)

@@ -262,6 +262,25 @@ def test_auth_jwt_token_validation(client: TestClient):
     res = client.get("/api/pacientes", headers=headers)
     assert res.status_code == 200
 
+def test_field_level_encryption():
+    from crypto_utils import encrypt_field, decrypt_field
+    original_dni = "45097900"
+    encrypted = encrypt_field(original_dni)
+    assert encrypted.startswith("ENC:")
+    assert encrypted != original_dni
+    decrypted = decrypt_field(encrypted)
+    assert decrypted == original_dni
+
+def test_audit_logging():
+    from audit import log_audit_event, audit_log_file
+    import os
+    log_audit_event(accion="PRUEBA_AUDITORIA", usuario_id="test_user", paciente_id=999, detalle="Prueba unitaria de auditoría Ley 26.529")
+    assert os.path.exists(audit_log_file)
+    with open(audit_log_file, "r", encoding="utf-8") as f:
+        content = f.read()
+        assert "PRUEBA_AUDITORIA" in content
+
+
 
 
 
