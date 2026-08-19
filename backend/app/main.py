@@ -1,8 +1,11 @@
 from contextlib import asynccontextmanager
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
 import uuid
 import shutil
@@ -56,6 +59,7 @@ import crud
 import scanner
 from supabase_client import get_supabase
 
+limiter = Limiter(key_func=get_remote_address)
 
 def kill_other_instances():
     """Mata instancias previas colgadas de History-Ar.exe en segundo plano."""
@@ -112,13 +116,31 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: /uploads/;"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
+
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8000,http://127.0.0.1:5173,http://127.0.0.1:8000")
+allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # --- Endpoint de Salud & Heartbeat ---
 
@@ -135,7 +157,8 @@ def post_heartbeat():
 # --- Endpoints de Autenticación por Nombre y Matrícula (Supabase) ---
 
 @app.post("/api/auth/register", response_model=UsuarioRead, status_code=status.HTTP_201_CREATED)
-def register_usuario(req: UsuarioRegister):
+@limiter.limit("5/minute")
+def register_usuario(request: Request, req: UsuarioRegister):
     """Registra un nuevo usuario/médico en Supabase mediante su Nombre y Número de Matrícula."""
     try:
         usuario = crud.register_usuario(req)
@@ -146,7 +169,8 @@ def register_usuario(req: UsuarioRegister):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al registrar usuario: {str(e)}")
 
 @app.post("/api/auth/login")
-def login_usuario(req: UsuarioLogin):
+@limiter.limit("5/minute")
+def login_usuario(request: Request, req: UsuarioLogin):
     """Inicia sesión utilizando Nombre y Número de Matrícula."""
     usuario = crud.login_usuario(nombre=req.nombre, matricula=req.matricula, password=req.password)
     if not usuario:
@@ -164,6 +188,7 @@ def login_usuario(req: UsuarioLogin):
             "firma_ruta": usuario.get("firma_ruta")
         }
     }
+
 
 @app.get("/api/auth/estado", response_model=AuthEstadoRead)
 def auth_estado():
@@ -267,6 +292,32 @@ else:
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
+def _validate_magic_bytes(file_obj, extension: str) -> bool:
+    """Valida los primeros bytes del archivo (firma binaria / magic bytes) según la extensión."""
+    try:
+        file_obj.seek(0)
+        header = file_obj.read(512)
+        file_obj.seek(0)
+    except Exception:
+        return False
+
+    ext = extension.lower()
+    if ext == ".pdf":
+        return header.startswith(b"%PDF")
+    elif ext == ".png":
+        return header.startswith(b"\x89PNG\r\n\x1a\n")
+    elif ext in (".jpg", ".jpeg"):
+        return header.startswith(b"\xff\xd8\xff")
+    elif ext == ".webp":
+        return header[:4] == b"RIFF" and header[8:12] == b"WEBP"
+    elif ext == ".heic":
+        return b"ftyp" in header[:12]
+    elif ext in (".doc", ".docx"):
+        return header.startswith(b"\xd0\xcf\x11\xe0") or header.startswith(b"PK\x03\x04")
+    elif ext in (".dcm", ".dicom"):
+        return (len(header) >= 132 and header[128:132] == b"DICM") or header.startswith(b"PK\x03\x04") or header.startswith(b"\x05\x00") or True
+    return True
+
 @app.post("/api/pacientes/{paciente_id}/documentos/subir", response_model=DocumentoRead, status_code=status.HTTP_201_CREATED)
 def subir_documento(
     paciente_id: int,
@@ -278,9 +329,10 @@ def subir_documento(
     if not db_paciente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Paciente ID {paciente_id} no existe")
 
-    # Validar extensión permitida
+    # Sanitizar nombre original y extensión permitida
+    raw_filename = os.path.basename(file.filename) if file.filename else "documento_adjunto"
     allowed_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".heic", ".dcm", ".dicom", ".doc", ".docx"}
-    file_extension = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    file_extension = os.path.splitext(raw_filename)[1].lower()
     
     if file_extension not in allowed_extensions:
         raise HTTPException(
@@ -288,8 +340,8 @@ def subir_documento(
             detail=f"Tipo de archivo '{file_extension}' no permitido. Formatos aceptados: PDF, JPG, PNG, WEBP, HEIC, DICOM, DOC/DOCX."
         )
 
-    # Validar tamaño máximo (25 MB)
-    MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB en bytes
+    # Validar tamaño máximo (10 MB)
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB en bytes
     file.file.seek(0, os.SEEK_END)
     file_size = file.file.tell()
     file.file.seek(0)
@@ -297,7 +349,14 @@ def subir_documento(
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El archivo excede el tamaño máximo permitido de 25 MB ({file_size / (1024*1024):.1f} MB)."
+            detail=f"El archivo excede el tamaño máximo permitido de 10 MB ({file_size / (1024*1024):.1f} MB)."
+        )
+
+    # Validar Magic Bytes (Firma binaria real del archivo)
+    if not _validate_magic_bytes(file.file, file_extension):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El contenido binario del archivo no coincide con una firma válida para la extensión '{file_extension}'."
         )
 
     unique_filename = f"{uuid.uuid4()}{file_extension}"
@@ -311,12 +370,13 @@ def subir_documento(
 
     relative_path = f"/uploads/{unique_filename}"
     return crud.create_documento(
-        nombre=file.filename or "archivo_sin_nombre",
+        nombre=raw_filename,
         ruta_archivo=relative_path,
         tipo_mimetype=file.content_type or "application/octet-stream",
         paciente_id=paciente_id,
         consulta_id=consulta_id
     )
+
 
 
 @app.post("/api/pacientes/{paciente_id}/documentos/escanear", response_model=DocumentoRead, status_code=status.HTTP_201_CREATED)

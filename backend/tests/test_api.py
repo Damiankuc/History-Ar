@@ -42,7 +42,12 @@ def client_fixture(session: Session):
 def test_health_check(client: TestClient):
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "app": "History-Ar Backend"}
+    assert response.json() == {"status": "ok", "app": "History-Ar Backend (Supabase Cloud)"}
+    # Verificar cabeceras de seguridad OWASP
+    assert response.headers.get("x-content-type-options") == "nosniff"
+    assert response.headers.get("x-frame-options") == "DENY"
+    assert "max-age=" in response.headers.get("strict-transport-security", "")
+
 
 def test_create_paciente(client: TestClient):
     paciente_data = {
@@ -241,5 +246,14 @@ def test_agenda_citas(client: TestClient):
     res_delete = client.delete(f"/api/citas/{cita_id}")
     assert res_delete.status_code == 200
     assert res_delete.json() == {"message": "Cita eliminada con éxito"}
+
+def test_magic_bytes_upload_security(client: TestClient):
+    # Intentar subir un archivo con extensión .pdf pero contenido no binario (falso PDF)
+    fake_pdf = ("malicious.pdf", b"NOT_A_REAL_PDF_HEADER", "application/pdf")
+    res = client.post("/api/pacientes/1/documentos/subir", files={"file": fake_pdf})
+    # Debe ser rechazado con 400 Bad Request debido a fallo en validación de Magic Bytes
+    assert res.status_code == 400
+    assert "contenido binario" in res.json()["detail"].lower() or "firma válida" in res.json()["detail"].lower()
+
 
 

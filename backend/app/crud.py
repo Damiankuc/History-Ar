@@ -61,16 +61,17 @@ def login_usuario(nombre: str, matricula: str, password: Optional[str] = None) -
         return None
         
     usuario = res.data[0]
-    # Verificar coincidencia parcial o total de nombre (insensible a mayúsculas)
-    if nombre_clean not in usuario["nombre"].lower():
+    # Verificar coincidencia exacta de nombre (insensible a mayúsculas y espacios)
+    if usuario.get("nombre", "").strip().lower() != nombre_clean:
         return None
         
-    # Verificar contraseña si el usuario tiene una configurada
+    # Verificar contraseña obligatoria si el usuario la tiene configurada
     if usuario.get("password_hash"):
         if not password or not _check_password(password, usuario["password_hash"]):
             return None
             
     return usuario
+
 
 # --- CRUD Pacientes ---
 
