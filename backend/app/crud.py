@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import bcrypt
-from supabase_client import get_supabase
+from supabase_client import get_supabase, get_supabase_for_user
 from schemas import (
     UsuarioRegister, UsuarioLogin, UsuarioRead,
     PacienteCreate, PacienteRead, PacienteReadConConsultas,
@@ -46,6 +46,14 @@ def register_usuario(usuario_in: UsuarioRegister) -> Dict[str, Any]:
         "password_hash": pass_hash
     }
     
+    # Intentar también registro en Supabase Auth nativo si hay password
+    email = f"doctor_{usuario_in.matricula.strip()}@history-ar.local"
+    if usuario_in.password:
+        try:
+            supabase.auth.sign_up({"email": email, "password": usuario_in.password})
+        except Exception:
+            pass
+
     res = supabase.table("usuarios").insert(data).execute()
     if res.data and len(res.data) > 0:
         return res.data[0]
@@ -69,14 +77,26 @@ def login_usuario(nombre: str, matricula: str, password: Optional[str] = None) -
     if usuario.get("password_hash"):
         if not password or not _check_password(password, usuario["password_hash"]):
             return None
+
+    # Intentar obtener JWT de Supabase Auth nativo
+    access_token = None
+    email = usuario.get("email") or f"doctor_{matricula_clean}@history-ar.local"
+    if password:
+        try:
+            auth_res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            if auth_res and auth_res.session:
+                access_token = auth_res.session.access_token
+        except Exception:
+            pass
             
+    usuario["access_token"] = access_token
     return usuario
 
 
 # --- CRUD Pacientes ---
 
-def get_pacientes(skip: int = 0, limit: int = 100, q: Optional[str] = None) -> List[Dict[str, Any]]:
-    supabase = get_supabase()
+def get_pacientes(skip: int = 0, limit: int = 100, q: Optional[str] = None, token: Optional[str] = None) -> List[Dict[str, Any]]:
+    supabase = get_supabase_for_user(token)
     query = supabase.table("pacientes").select("*")
     if q and q.strip():
         search = f"%{q.strip()}%"
@@ -85,6 +105,7 @@ def get_pacientes(skip: int = 0, limit: int = 100, q: Optional[str] = None) -> L
     query = query.order("apellido").order("nombre").range(skip, skip + limit - 1)
     res = query.execute()
     return res.data or []
+
 
 def get_paciente(paciente_id: int) -> Optional[Dict[str, Any]]:
     supabase = get_supabase()

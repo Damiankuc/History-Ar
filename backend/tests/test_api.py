@@ -255,5 +255,14 @@ def test_magic_bytes_upload_security(client: TestClient):
     assert res.status_code == 400
     assert "contenido binario" in res.json()["detail"].lower() or "firma válida" in res.json()["detail"].lower()
 
+def test_auth_jwt_token_validation(client: TestClient):
+    # Probar que las peticiones a endpoints de pacientes aceptan cabeceras Bearer JWT
+    mock_jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkRvY3RvciIsImlhdCI6MTUxNjIzOTAyMn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    headers = {"Authorization": f"Bearer {mock_jwt}"}
+    res = client.get("/api/pacientes", headers=headers)
+    assert res.status_code == 200
+
+
+
 
 

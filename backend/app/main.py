@@ -58,8 +58,10 @@ from sqlmodel import Session, select
 import crud
 import scanner
 from supabase_client import get_supabase
+from auth import get_current_user, get_current_user_token
 
 limiter = Limiter(key_func=get_remote_address)
+
 
 def kill_other_instances():
     """Mata instancias previas colgadas de History-Ar.exe en segundo plano."""
@@ -171,14 +173,14 @@ def register_usuario(request: Request, req: UsuarioRegister):
 @app.post("/api/auth/login")
 @limiter.limit("5/minute")
 def login_usuario(request: Request, req: UsuarioLogin):
-    """Inicia sesión utilizando Nombre y Número de Matrícula."""
+    """Inicia sesión utilizando Nombre y Número de Matrícula y devuelve token JWT si está disponible."""
     usuario = crud.login_usuario(nombre=req.nombre, matricula=req.matricula, password=req.password)
     if not usuario:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Nombre o número de matrícula incorrectos"
         )
-    return {
+    resp = {
         "ok": True,
         "usuario": {
             "id": usuario["id"],
@@ -188,6 +190,10 @@ def login_usuario(request: Request, req: UsuarioLogin):
             "firma_ruta": usuario.get("firma_ruta")
         }
     }
+    if usuario.get("access_token"):
+        resp["access_token"] = usuario["access_token"]
+        resp["token_type"] = "bearer"
+    return resp
 
 
 @app.get("/api/auth/estado", response_model=AuthEstadoRead)
@@ -209,9 +215,16 @@ def auth_estado():
 # --- Endpoints de Pacientes ---
 
 @app.get("/api/pacientes", response_model=List[PacienteRead])
-def read_pacientes(q: Optional[str] = None, skip: int = 0, limit: int = 100):
-    """Obtiene el listado de pacientes desde Supabase."""
-    return crud.get_pacientes(skip=skip, limit=limit, q=q)
+def read_pacientes(
+    q: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    token: Optional[str] = Depends(get_current_user_token)
+):
+    """Obtiene el listado de pacientes desde Supabase propagando el token al RLS de Postgres."""
+    return crud.get_pacientes(skip=skip, limit=limit, q=q, token=token)
+
 
 @app.get("/api/pacientes/{paciente_id}", response_model=PacienteReadConConsultas)
 def read_paciente(paciente_id: int):
