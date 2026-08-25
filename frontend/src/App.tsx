@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { BuscadorMedicamentos } from "./BuscadorMedicamentos";
+import { SelectorPlantillas } from "./SelectorPlantillas";
+import { AutocompletarCIE10 } from "./AutocompletarCIE10";
 import "./App.css";
 
 
@@ -2318,6 +2320,20 @@ function App() {
                         {/* Formulario Nueva Consulta */}
                         <div className="card">
                           <h3 style={{ marginBottom: "1.25rem", color: "var(--primary)" }}>Registrar Nueva Consulta</h3>
+
+                          <SelectorPlantillas
+                            consultaActual={newConsulta}
+                            onAplicarPlantilla={(plantilla) => {
+                              setNewConsulta((prev) => ({
+                                ...prev,
+                                motivo: plantilla.motivo,
+                                diagnostico: plantilla.diagnostico,
+                                tratamiento: plantilla.tratamiento,
+                                notas: plantilla.notas !== undefined ? plantilla.notas : prev.notas
+                              }));
+                            }}
+                          />
+
                           <form onSubmit={handleCreateConsulta}>
                             <div className="form-group">
                               <label className="form-label">Motivo de Consulta *</label>
@@ -2331,15 +2347,10 @@ function App() {
                               />
                             </div>
                             <div className="form-group">
-                              <label className="form-label">Diagnóstico / Evaluación *</label>
-                              <textarea
-                                className="form-input"
-                                rows={3}
-                                placeholder="Descripción de los síntomas y diagnóstico..."
+                              <label className="form-label">Diagnóstico / Evaluación (CIE-10) *</label>
+                              <AutocompletarCIE10
                                 value={newConsulta.diagnostico}
-                                onChange={(e) => setNewConsulta({ ...newConsulta, diagnostico: e.target.value })}
-                                style={{ resize: "vertical" }}
-                                required
+                                onChange={(val) => setNewConsulta({ ...newConsulta, diagnostico: val })}
                               />
                             </div>
 
