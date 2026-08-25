@@ -554,10 +554,16 @@ function App() {
     initApp();
   }, []);
 
-  // Latido continuo de conexión (heartbeat) para mantener el backend activo
+  // Latido continuo de conexión (heartbeat) para mantener el backend activo y verificar estado
   useEffect(() => {
     const hbInterval = setInterval(() => {
-      fetch(`${API_BASE_URL}/heartbeat`, { method: "POST" }).catch(() => {});
+      fetch(`${API_BASE_URL}/heartbeat`, { method: "POST" })
+        .then((res) => {
+          if (res.ok) setApiOnline(true);
+        })
+        .catch(() => {
+          setApiOnline(false);
+        });
     }, 2500);
     return () => clearInterval(hbInterval);
   }, []);
@@ -583,7 +589,9 @@ function App() {
             doctor_matricula: parsed.matricula || ""
           }));
           setAppState("ready");
-          setApiOnline(true);
+          fetch(`${API_BASE_URL}/health`)
+            .then(res => setApiOnline(res.ok))
+            .catch(() => setApiOnline(false));
           return;
         } catch {
           localStorage.removeItem("history_ar_user");

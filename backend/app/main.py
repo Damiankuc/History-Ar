@@ -132,7 +132,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8000,http://127.0.0.1:5173,http://127.0.0.1:8000")
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "http://localhost:1420,http://localhost:1421,http://localhost:5173,http://localhost:3000,http://localhost:8000,http://127.0.0.1:1420,http://127.0.0.1:1421,http://127.0.0.1:5173,http://127.0.0.1:8000")
 allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
 
 app.add_middleware(
