@@ -4,6 +4,9 @@ import bcrypt
 from supabase_client import get_supabase, get_supabase_for_user
 from crypto_utils import encrypt_field, decrypt_field
 from audit import log_audit_event
+from database import engine
+from sqlmodel import Session, select
+from models import Paciente, Consulta, Documento, Receta, Cita
 from schemas import (
     UsuarioRegister, UsuarioLogin, UsuarioRead,
     PacienteCreate, PacienteRead, PacienteReadConConsultas,
@@ -144,88 +147,270 @@ def login_usuario(nombre: str, matricula: str, password: Optional[str] = None) -
 # --- CRUD Pacientes ---
 
 def get_pacientes(skip: int = 0, limit: int = 100, q: Optional[str] = None, token: Optional[str] = None) -> List[Dict[str, Any]]:
-    supabase = get_supabase_for_user(token)
-    query = supabase.table("pacientes").select("*")
-    if q and q.strip():
-        search = f"%{q.strip()}%"
-        query = query.or_(f"nombre.ilike.{search},apellido.ilike.{search},dni.ilike.{search}")
-    
-    query = query.order("apellido").order("nombre").range(skip, skip + limit - 1)
-    res = query.execute()
-    pacientes = res.data or []
-    return [_decrypt_paciente(p) for p in pacientes]
+    try:
+        supabase = get_supabase_for_user(token)
+        query = supabase.table("pacientes").select("*")
+        if q and q.strip():
+            search = f"%{q.strip()}%"
+            query = query.or_(f"nombre.ilike.{search},apellido.ilike.{search},dni.ilike.{search}")
+        
+        query = query.order("apellido").order("nombre").range(skip, skip + limit - 1)
+        res = query.execute()
+        pacientes = res.data or []
+        if len(pacientes) > 0:
+            return [_decrypt_paciente(p) for p in pacientes]
+    except Exception as e:
+        print(f"Aviso al obtener pacientes de Supabase: {e}")
+
+    # Fallback local a SQLite
+    with Session(engine) as session:
+        stmt = select(Paciente)
+        if q and q.strip():
+            q_clean = f"%{q.strip()}%"
+            stmt = stmt.where(
+                (Paciente.nombre.like(q_clean)) | 
+                (Paciente.apellido.like(q_clean)) | 
+                (Paciente.dni.like(q_clean))
+            )
+        stmt = stmt.offset(skip).limit(limit)
+        locales = session.exec(stmt).all()
+        return [
+            {
+                "id": p.id,
+                "nombre": p.nombre,
+                "apellido": p.apellido,
+                "dni": p.dni,
+                "fecha_nacimiento": p.fecha_nacimiento,
+                "telefono": p.telefono,
+                "email": p.email,
+                "direccion": p.direccion,
+                "obra_social": p.obra_social,
+                "numero_afiliado": p.numero_afiliado,
+                "notas_generales": p.notas_generales,
+                "fecha_creacion": p.fecha_creacion
+            } for p in locales
+        ]
 
 
 def get_paciente(paciente_id: int) -> Optional[Dict[str, Any]]:
-    supabase = get_supabase()
-    res = supabase.table("pacientes").select("*").eq("id", paciente_id).execute()
-    if res.data and len(res.data) > 0:
-        paciente = _decrypt_paciente(res.data[0])
-        # Cargar relaciones completas (consultas, documentos, recetas, citas)
-        consultas = get_consultas_por_paciente(paciente_id)
-        documentos = get_documentos_por_paciente(paciente_id)
-        recetas = get_recetas_por_paciente(paciente_id)
-        citas = supabase.table("citas").select("*").eq("paciente_id", paciente_id).execute().data or []
-        
-        paciente["consultas"] = consultas
-        paciente["documentos"] = documentos
-        paciente["recetas"] = recetas
-        paciente["citas"] = citas
-        log_audit_event(accion="LECTURA_HISTORIA_CLINICA", paciente_id=paciente_id, detalle=f"Lectura completa de historia clínica de paciente ID {paciente_id}")
-        return paciente
+    try:
+        supabase = get_supabase()
+        res = supabase.table("pacientes").select("*").eq("id", paciente_id).execute()
+        if res.data and len(res.data) > 0:
+            paciente = _decrypt_paciente(res.data[0])
+            consultas = get_consultas_por_paciente(paciente_id)
+            documentos = get_documentos_por_paciente(paciente_id)
+            recetas = get_recetas_por_paciente(paciente_id)
+            citas_res = supabase.table("citas").select("*").eq("paciente_id", paciente_id).execute()
+            citas = citas_res.data or []
+            
+            paciente["consultas"] = consultas
+            paciente["documentos"] = documentos
+            paciente["recetas"] = recetas
+            paciente["citas"] = citas
+            log_audit_event(accion="LECTURA_HISTORIA_CLINICA", paciente_id=paciente_id, detalle=f"Lectura completa de historia clínica de paciente ID {paciente_id}")
+            return paciente
+    except Exception as e:
+        print(f"Aviso al obtener paciente ID {paciente_id} de Supabase: {e}")
+
+    with Session(engine) as session:
+        p = session.get(Paciente, paciente_id)
+        if p:
+            consultas = session.exec(select(Consulta).where(Consulta.paciente_id == paciente_id)).all()
+            documentos = session.exec(select(Documento).where(Documento.paciente_id == paciente_id)).all()
+            recetas = session.exec(select(Receta).where(Receta.paciente_id == paciente_id)).all()
+            citas = session.exec(select(Cita).where(Cita.paciente_id == paciente_id)).all()
+
+            return {
+                "id": p.id,
+                "nombre": p.nombre,
+                "apellido": p.apellido,
+                "dni": p.dni,
+                "fecha_nacimiento": p.fecha_nacimiento,
+                "telefono": p.telefono,
+                "email": p.email,
+                "direccion": p.direccion,
+                "obra_social": p.obra_social,
+                "numero_afiliado": p.numero_afiliado,
+                "notas_generales": p.notas_generales,
+                "fecha_creacion": p.fecha_creacion,
+                "consultas": [{"id": c.id, "motivo": c.motivo, "diagnostico": c.diagnostico, "tratamiento": c.tratamiento, "notas": c.notas, "fecha": c.fecha, "paciente_id": c.paciente_id} for c in consultas],
+                "documentos": [{"id": d.id, "nombre": d.nombre, "ruta_archivo": d.ruta_archivo, "tipo_mimetype": d.tipo_mimetype, "fecha_subida": d.fecha_subida, "paciente_id": d.paciente_id, "consulta_id": d.consulta_id} for d in documentos],
+                "recetas": [{"id": r.id, "medicamentos": r.medicamentos, "indicaciones": r.indicaciones, "fecha": r.fecha, "paciente_id": r.paciente_id, "consulta_id": r.consulta_id} for r in recetas],
+                "citas": [{"id": ci.id, "fecha_hora": ci.fecha_hora, "duracion_minutos": ci.duracion_minutos, "motivo": ci.motivo, "estado": ci.estado, "paciente_id": ci.paciente_id} for ci in citas]
+            }
     return None
 
 def get_paciente_by_dni(dni: str) -> Optional[Dict[str, Any]]:
-    supabase = get_supabase()
-    encrypted_dni = encrypt_field(dni.strip())
-    # Buscar por DNI plano o DNI cifrado
-    res = supabase.table("pacientes").select("*").or_(f"dni.eq.{dni.strip()},dni.eq.{encrypted_dni}").execute()
-    if res.data and len(res.data) > 0:
-        return _decrypt_paciente(res.data[0])
+    try:
+        supabase = get_supabase()
+        encrypted_dni = encrypt_field(dni.strip())
+        res = supabase.table("pacientes").select("*").or_(f"dni.eq.{dni.strip()},dni.eq.{encrypted_dni}").execute()
+        if res.data and len(res.data) > 0:
+            return _decrypt_paciente(res.data[0])
+    except Exception:
+        pass
+
+    with Session(engine) as session:
+        p = session.exec(select(Paciente).where(Paciente.dni == dni.strip())).first()
+        if p:
+            return {
+                "id": p.id,
+                "nombre": p.nombre,
+                "apellido": p.apellido,
+                "dni": p.dni,
+                "fecha_nacimiento": p.fecha_nacimiento,
+                "telefono": p.telefono,
+                "email": p.email,
+                "direccion": p.direccion,
+                "obra_social": p.obra_social,
+                "numero_afiliado": p.numero_afiliado,
+                "notas_generales": p.notas_generales,
+                "fecha_creacion": p.fecha_creacion
+            }
     return None
 
 def create_paciente(paciente_in: PacienteCreate) -> Dict[str, Any]:
-    supabase = get_supabase()
     data = paciente_in.model_dump(exclude_unset=True)
-    _encrypt_paciente_data(data)
-    res = supabase.table("pacientes").insert(data).execute()
-    if res.data and len(res.data) > 0:
-        paciente = _decrypt_paciente(res.data[0])
-        log_audit_event(accion="CREACION_PACIENTE", paciente_id=paciente["id"], detalle=f"Creación de nuevo paciente ID {paciente['id']}")
-        return paciente
-    raise Exception("No se pudo crear el paciente en Supabase")
+    try:
+        supabase = get_supabase()
+        data_supa = dict(data)
+        _encrypt_paciente_data(data_supa)
+        res = supabase.table("pacientes").insert(data_supa).execute()
+        if res.data and len(res.data) > 0:
+            paciente = _decrypt_paciente(res.data[0])
+            log_audit_event(accion="CREACION_PACIENTE", paciente_id=paciente["id"], detalle=f"Creación de nuevo paciente ID {paciente['id']}")
+            return paciente
+    except Exception as e:
+        print(f"Aviso al guardar paciente en Supabase (usando resguardo local SQLite): {e}")
+
+    with Session(engine) as session:
+        existente = session.exec(select(Paciente).where(Paciente.dni == paciente_in.dni.strip())).first()
+        if existente:
+            return {
+                "id": existente.id,
+                "nombre": existente.nombre,
+                "apellido": existente.apellido,
+                "dni": existente.dni,
+                "fecha_nacimiento": existente.fecha_nacimiento,
+                "telefono": existente.telefono,
+                "email": existente.email,
+                "direccion": existente.direccion,
+                "obra_social": existente.obra_social,
+                "numero_afiliado": existente.numero_afiliado,
+                "notas_generales": existente.notas_generales,
+                "fecha_creacion": existente.fecha_creacion
+            }
+        nuevo_local = Paciente(**data)
+        session.add(nuevo_local)
+        session.commit()
+        session.refresh(nuevo_local)
+        log_audit_event(accion="CREACION_PACIENTE", paciente_id=nuevo_local.id, detalle=f"Creación local de paciente ID {nuevo_local.id}")
+        return {
+            "id": nuevo_local.id,
+            "nombre": nuevo_local.nombre,
+            "apellido": nuevo_local.apellido,
+            "dni": nuevo_local.dni,
+            "fecha_nacimiento": nuevo_local.fecha_nacimiento,
+            "telefono": nuevo_local.telefono,
+            "email": nuevo_local.email,
+            "direccion": nuevo_local.direccion,
+            "obra_social": nuevo_local.obra_social,
+            "numero_afiliado": nuevo_local.numero_afiliado,
+            "notas_generales": nuevo_local.notas_generales,
+            "fecha_creacion": nuevo_local.fecha_creacion
+        }
 
 def update_paciente(paciente_id: int, paciente_update: PacienteCreate) -> Optional[Dict[str, Any]]:
-    supabase = get_supabase()
     data = paciente_update.model_dump(exclude_unset=True)
-    _encrypt_paciente_data(data)
-    res = supabase.table("pacientes").update(data).eq("id", paciente_id).execute()
-    if res.data and len(res.data) > 0:
-        paciente = _decrypt_paciente(res.data[0])
-        log_audit_event(accion="MODIFICACION_PACIENTE", paciente_id=paciente_id, detalle=f"Modificación de paciente ID {paciente_id}")
-        return paciente
+    try:
+        supabase = get_supabase()
+        data_supa = dict(data)
+        _encrypt_paciente_data(data_supa)
+        res = supabase.table("pacientes").update(data_supa).eq("id", paciente_id).execute()
+        if res.data and len(res.data) > 0:
+            paciente = _decrypt_paciente(res.data[0])
+            log_audit_event(accion="MODIFICACION_PACIENTE", paciente_id=paciente_id, detalle=f"Modificación de paciente ID {paciente_id}")
+            return paciente
+    except Exception as e:
+        print(f"Aviso al modificar paciente en Supabase: {e}")
+
+    with Session(engine) as session:
+        p = session.get(Paciente, paciente_id)
+        if p:
+            for k, v in data.items():
+                setattr(p, k, v)
+            session.add(p)
+            session.commit()
+            session.refresh(p)
+            return {
+                "id": p.id,
+                "nombre": p.nombre,
+                "apellido": p.apellido,
+                "dni": p.dni,
+                "fecha_nacimiento": p.fecha_nacimiento,
+                "telefono": p.telefono,
+                "email": p.email,
+                "direccion": p.direccion,
+                "obra_social": p.obra_social,
+                "numero_afiliado": p.numero_afiliado,
+                "notas_generales": p.notas_generales,
+                "fecha_creacion": p.fecha_creacion
+            }
     return None
 
 def delete_paciente(paciente_id: int) -> bool:
-    supabase = get_supabase()
-    res = supabase.table("pacientes").delete().eq("id", paciente_id).execute()
-    if bool(res.data):
+    eliminado = False
+    try:
+        supabase = get_supabase()
+        res = supabase.table("pacientes").delete().eq("id", paciente_id).execute()
+        if bool(res.data):
+            eliminado = True
+    except Exception as e:
+        print(f"Aviso al eliminar paciente en Supabase: {e}")
+
+    with Session(engine) as session:
+        p = session.get(Paciente, paciente_id)
+        if p:
+            session.delete(p)
+            session.commit()
+            eliminado = True
+
+    if eliminado:
         log_audit_event(accion="ELIMINACION_PACIENTE", paciente_id=paciente_id, detalle=f"Eliminación de ficha de paciente ID {paciente_id}")
-        return True
-    return False
+    return eliminado
 
 # --- CRUD Consultas (Historias Médicas / Padecimientos) ---
 
 def create_consulta(consulta_in: ConsultaCreate) -> Dict[str, Any]:
-    supabase = get_supabase()
     data = consulta_in.model_dump(exclude_unset=True)
-    _encrypt_consulta_data(data)
-    res = supabase.table("consultas").insert(data).execute()
-    if res.data and len(res.data) > 0:
-        consulta = _decrypt_consulta(res.data[0])
-        log_audit_event(accion="CREACION_CONSULTA", paciente_id=consulta.get("paciente_id"), detalle=f"Registro de consulta médica ID {consulta.get('id')}")
-        return consulta
-    raise Exception("No se pudo registrar la consulta médica")
+    try:
+        supabase = get_supabase()
+        data_supa = dict(data)
+        _encrypt_consulta_data(data_supa)
+        res = supabase.table("consultas").insert(data_supa).execute()
+        if res.data and len(res.data) > 0:
+            consulta = _decrypt_consulta(res.data[0])
+            log_audit_event(accion="CREACION_CONSULTA", paciente_id=consulta.get("paciente_id"), detalle=f"Registro de consulta médica ID {consulta.get('id')}")
+            return consulta
+    except Exception as e:
+        print(f"Aviso al guardar consulta en Supabase: {e}")
+
+    with Session(engine) as session:
+        nueva_c = Consulta(**data)
+        session.add(nueva_c)
+        session.commit()
+        session.refresh(nueva_c)
+        log_audit_event(accion="CREACION_CONSULTA", paciente_id=nueva_c.paciente_id, detalle=f"Registro local de consulta médica ID {nueva_c.id}")
+        return {
+            "id": nueva_c.id,
+            "motivo": nueva_c.motivo,
+            "diagnostico": nueva_c.diagnostico,
+            "tratamiento": nueva_c.tratamiento,
+            "notas": nueva_c.notas,
+            "fecha": nueva_c.fecha,
+            "paciente_id": nueva_c.paciente_id
+        }
 
 def get_consulta(consulta_id: int) -> Optional[Dict[str, Any]]:
     supabase = get_supabase()
