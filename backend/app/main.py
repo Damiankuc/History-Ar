@@ -63,6 +63,26 @@ from auth import get_current_user, get_current_user_token
 limiter = Limiter(key_func=get_remote_address)
 
 
+def free_port_8000():
+    """Si el puerto 8000 está ocupado por una instancia previa o de dev, lo libera antes de arrancar."""
+    if not getattr(sys, 'frozen', False):
+        return
+    try:
+        current_pid = str(os.getpid())
+        output = subprocess.check_output("netstat -ano", shell=True, text=True, errors="ignore")
+        pids_to_kill = set()
+        for line in output.strip().splitlines():
+            if ":8000 " in line and "LISTENING" in line:
+                parts = line.strip().split()
+                pid = parts[-1]
+                if pid != current_pid and pid != "0":
+                    pids_to_kill.add(pid)
+        for pid in pids_to_kill:
+            subprocess.run(f"taskkill /F /PID {pid}", shell=True, capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            time.sleep(0.3)
+    except Exception:
+        pass
+
 def kill_other_instances():
     """Mata instancias previas colgadas de History-Ar.exe en segundo plano."""
     if not getattr(sys, 'frozen', False):
@@ -1121,6 +1141,15 @@ if os.path.exists(static_dir):
 if __name__ == "__main__":
     import uvicorn
     if getattr(sys, 'frozen', False):
-        uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
+        free_port_8000()
+        kill_other_instances()
+        try:
+            uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
+        except Exception as e:
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(0, f"No se pudo iniciar el servidor History-Ar en el puerto 8000.\n\nDetalle: {str(e)}", "History-Ar Error", 0x10)
+            except Exception:
+                pass
     else:
         uvicorn.run(app, host="127.0.0.1", port=8000)
