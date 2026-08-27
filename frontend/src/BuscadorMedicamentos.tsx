@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 
 export interface Medicamento {
   id?: number;
-  nombre_comercial: str;
+  nombre_comercial: string;
   monodroga?: string;
   presentacion?: string;
   dosis_sugerida?: string;
@@ -28,8 +28,6 @@ export const BuscadorMedicamentos: React.FC<BuscadorMedicamentosProps> = ({
 
   // Campos de posología asistida
   const [posologiaCustom, setPosologiaCustom] = useState("");
-  const [frecuenciaSel, setFrecuenciaSel] = useState("cada 8hs");
-  const [duracionSel, setDuracionSel] = useState("por 7 días");
   const [guardarCustom, setGuardarCustom] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -119,7 +117,7 @@ export const BuscadorMedicamentos: React.FC<BuscadorMedicamentosProps> = ({
     if (selectedMed.presentacion) {
       lineaText += ` [${selectedMed.presentacion}]`;
     }
-    lineaText += `: ${posologiaCustom || `${frecuenciaSel} ${duracionSel}`.trim()}`;
+    lineaText += `: ${posologiaCustom.trim() || selectedMed.dosis_sugerida || "Según indicación médica"}`;
 
     onInsertarMedicamento(lineaText);
 

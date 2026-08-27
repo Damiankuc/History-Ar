@@ -6,7 +6,7 @@ from crypto_utils import encrypt_field, decrypt_field
 from audit import log_audit_event
 from database import engine
 from sqlmodel import Session, select
-from models import Paciente, Consulta, Documento, Receta, Cita
+from models import Paciente, Consulta, Documento, Receta, Cita, Configuracion
 from schemas import (
     UsuarioRegister, UsuarioLogin, UsuarioRead,
     PacienteCreate, PacienteRead, PacienteReadConConsultas,
@@ -429,105 +429,345 @@ def get_consultas_por_paciente(paciente_id: int) -> List[Dict[str, Any]]:
 # --- CRUD Documentos ---
 
 def create_documento(nombre: str, ruta_archivo: str, tipo_mimetype: str, paciente_id: int, consulta_id: Optional[int] = None) -> Dict[str, Any]:
-    supabase = get_supabase()
-    data = {
-        "nombre": nombre,
-        "ruta_archivo": ruta_archivo,
-        "tipo_mimetype": tipo_mimetype,
-        "paciente_id": paciente_id,
-        "consulta_id": consulta_id
-    }
-    res = supabase.table("documentos").insert(data).execute()
-    if res.data and len(res.data) > 0:
-        return res.data[0]
-    raise Exception("No se pudo crear el registro de documento en Supabase")
+    try:
+        supabase = get_supabase()
+        data = {
+            "nombre": nombre,
+            "ruta_archivo": ruta_archivo,
+            "tipo_mimetype": tipo_mimetype,
+            "paciente_id": paciente_id,
+            "consulta_id": consulta_id
+        }
+        res = supabase.table("documentos").insert(data).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        print(f"Aviso al guardar documento en Supabase: {e}")
+
+    with Session(engine) as session:
+        doc = Documento(
+            nombre=nombre,
+            ruta_archivo=ruta_archivo,
+            tipo_mimetype=tipo_mimetype,
+            paciente_id=paciente_id,
+            consulta_id=consulta_id
+        )
+        session.add(doc)
+        session.commit()
+        session.refresh(doc)
+        return {
+            "id": doc.id,
+            "nombre": doc.nombre,
+            "ruta_archivo": doc.ruta_archivo,
+            "tipo_mimetype": doc.tipo_mimetype,
+            "fecha_subida": doc.fecha_subida,
+            "paciente_id": doc.paciente_id,
+            "consulta_id": doc.consulta_id
+        }
 
 def get_documento(documento_id: int) -> Optional[Dict[str, Any]]:
-    supabase = get_supabase()
-    res = supabase.table("documentos").select("*").eq("id", documento_id).execute()
-    if res.data and len(res.data) > 0:
-        return res.data[0]
+    try:
+        supabase = get_supabase()
+        res = supabase.table("documentos").select("*").eq("id", documento_id).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        print(f"Aviso al obtener documento de Supabase: {e}")
+
+    with Session(engine) as session:
+        doc = session.get(Documento, documento_id)
+        if doc:
+            return {
+                "id": doc.id,
+                "nombre": doc.nombre,
+                "ruta_archivo": doc.ruta_archivo,
+                "tipo_mimetype": doc.tipo_mimetype,
+                "fecha_subida": doc.fecha_subida,
+                "paciente_id": doc.paciente_id,
+                "consulta_id": doc.consulta_id
+            }
     return None
 
 def get_documentos_por_paciente(paciente_id: int) -> List[Dict[str, Any]]:
-    supabase = get_supabase()
-    res = supabase.table("documentos").select("*").eq("paciente_id", paciente_id).order("fecha_subida", desc=True).execute()
-    return res.data or []
+    try:
+        supabase = get_supabase()
+        res = supabase.table("documentos").select("*").eq("paciente_id", paciente_id).order("fecha_subida", desc=True).execute()
+        if res.data is not None:
+            return res.data
+    except Exception as e:
+        print(f"Aviso al obtener documentos de paciente {paciente_id} de Supabase: {e}")
+
+    with Session(engine) as session:
+        docs = session.exec(select(Documento).where(Documento.paciente_id == paciente_id)).all()
+        return [
+            {
+                "id": d.id,
+                "nombre": d.nombre,
+                "ruta_archivo": d.ruta_archivo,
+                "tipo_mimetype": d.tipo_mimetype,
+                "fecha_subida": d.fecha_subida,
+                "paciente_id": d.paciente_id,
+                "consulta_id": d.consulta_id
+            } for d in docs
+        ]
 
 def delete_documento(documento_id: int) -> bool:
-    supabase = get_supabase()
-    res = supabase.table("documentos").delete().eq("id", documento_id).execute()
-    return bool(res.data)
+    try:
+        supabase = get_supabase()
+        res = supabase.table("documentos").delete().eq("id", documento_id).execute()
+        if res.data:
+            return True
+    except Exception as e:
+        print(f"Aviso al eliminar documento de Supabase: {e}")
+
+    with Session(engine) as session:
+        doc = session.get(Documento, documento_id)
+        if doc:
+            session.delete(doc)
+            session.commit()
+            return True
+    return False
 
 # --- CRUD Recetas ---
 
 def create_receta(receta_in: RecetaCreate) -> Dict[str, Any]:
-    supabase = get_supabase()
-    data = receta_in.model_dump(exclude_unset=True)
-    res = supabase.table("recetas").insert(data).execute()
-    if res.data and len(res.data) > 0:
-        return res.data[0]
-    raise Exception("No se pudo crear la receta")
+    try:
+        supabase = get_supabase()
+        data = receta_in.model_dump(exclude_unset=True)
+        res = supabase.table("recetas").insert(data).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        print(f"Aviso al crear receta en Supabase: {e}")
+
+    with Session(engine) as session:
+        r = Receta(
+            medicamentos=receta_in.medicamentos,
+            indicaciones=receta_in.indicaciones,
+            paciente_id=receta_in.paciente_id,
+            consulta_id=receta_in.consulta_id
+        )
+        session.add(r)
+        session.commit()
+        session.refresh(r)
+        return {
+            "id": r.id,
+            "medicamentos": r.medicamentos,
+            "indicaciones": r.indicaciones,
+            "fecha": r.fecha,
+            "paciente_id": r.paciente_id,
+            "consulta_id": r.consulta_id
+        }
 
 def get_receta(receta_id: int) -> Optional[Dict[str, Any]]:
-    supabase = get_supabase()
-    res = supabase.table("recetas").select("*").eq("id", receta_id).execute()
-    if res.data and len(res.data) > 0:
-        return res.data[0]
+    try:
+        supabase = get_supabase()
+        res = supabase.table("recetas").select("*").eq("id", receta_id).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        print(f"Aviso al obtener receta de Supabase: {e}")
+
+    with Session(engine) as session:
+        r = session.get(Receta, receta_id)
+        if r:
+            return {
+                "id": r.id,
+                "medicamentos": r.medicamentos,
+                "indicaciones": r.indicaciones,
+                "fecha": r.fecha,
+                "paciente_id": r.paciente_id,
+                "consulta_id": r.consulta_id
+            }
     return None
 
 def get_recetas_por_paciente(paciente_id: int) -> List[Dict[str, Any]]:
-    supabase = get_supabase()
-    res = supabase.table("recetas").select("*").eq("paciente_id", paciente_id).order("fecha", desc=True).execute()
-    return res.data or []
+    try:
+        supabase = get_supabase()
+        res = supabase.table("recetas").select("*").eq("paciente_id", paciente_id).order("fecha", desc=True).execute()
+        if res.data is not None:
+            return res.data
+    except Exception as e:
+        print(f"Aviso al obtener recetas de paciente {paciente_id} de Supabase: {e}")
+
+    with Session(engine) as session:
+        recetas = session.exec(select(Receta).where(Receta.paciente_id == paciente_id)).all()
+        return [
+            {
+                "id": r.id,
+                "medicamentos": r.medicamentos,
+                "indicaciones": r.indicaciones,
+                "fecha": r.fecha,
+                "paciente_id": r.paciente_id,
+                "consulta_id": r.consulta_id
+            } for r in recetas
+        ]
 
 def delete_receta(receta_id: int) -> bool:
-    supabase = get_supabase()
-    res = supabase.table("recetas").delete().eq("id", receta_id).execute()
-    return bool(res.data)
+    try:
+        supabase = get_supabase()
+        res = supabase.table("recetas").delete().eq("id", receta_id).execute()
+        if res.data:
+            return True
+    except Exception as e:
+        print(f"Aviso al eliminar receta de Supabase: {e}")
+
+    with Session(engine) as session:
+        r = session.get(Receta, receta_id)
+        if r:
+            session.delete(r)
+            session.commit()
+            return True
+    return False
 
 # --- CRUD Citas ---
 
 def create_cita(cita_in: CitaCreate) -> Dict[str, Any]:
-    supabase = get_supabase()
-    data = cita_in.model_dump(exclude_unset=True)
-    if "fecha_hora" in data and isinstance(data["fecha_hora"], datetime):
-        data["fecha_hora"] = data["fecha_hora"].isoformat()
-    res = supabase.table("citas").insert(data).execute()
-    if res.data and len(res.data) > 0:
-        return res.data[0]
-    raise Exception("No se pudo agendar la cita")
+    try:
+        supabase = get_supabase()
+        data = cita_in.model_dump(exclude_unset=True)
+        if "fecha_hora" in data and isinstance(data["fecha_hora"], datetime):
+            data["fecha_hora"] = data["fecha_hora"].isoformat()
+        res = supabase.table("citas").insert(data).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        print(f"Aviso al agendar cita en Supabase: {e}")
+
+    with Session(engine) as session:
+        c = Cita(
+            fecha_hora=cita_in.fecha_hora,
+            duracion_minutos=cita_in.duracion_minutos,
+            motivo=cita_in.motivo,
+            estado=cita_in.estado or "programado",
+            paciente_id=cita_in.paciente_id
+        )
+        session.add(c)
+        session.commit()
+        session.refresh(c)
+        return {
+            "id": c.id,
+            "fecha_hora": c.fecha_hora,
+            "duracion_minutos": c.duracion_minutos,
+            "motivo": c.motivo,
+            "estado": c.estado,
+            "paciente_id": c.paciente_id
+        }
 
 def get_cita(cita_id: int) -> Optional[Dict[str, Any]]:
-    supabase = get_supabase()
-    res = supabase.table("citas").select("*").eq("id", cita_id).execute()
-    if res.data and len(res.data) > 0:
-        return res.data[0]
+    try:
+        supabase = get_supabase()
+        res = supabase.table("citas").select("*").eq("id", cita_id).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        print(f"Aviso al obtener cita de Supabase: {e}")
+
+    with Session(engine) as session:
+        c = session.get(Cita, cita_id)
+        if c:
+            return {
+                "id": c.id,
+                "fecha_hora": c.fecha_hora,
+                "duracion_minutos": c.duracion_minutos,
+                "motivo": c.motivo,
+                "estado": c.estado,
+                "paciente_id": c.paciente_id
+            }
     return None
 
 def get_citas() -> List[Dict[str, Any]]:
-    supabase = get_supabase()
-    res = supabase.table("citas").select("*, paciente:paciente_id(id, nombre, apellido, dni, fecha_nacimiento, telefono, email)").order("fecha_hora").execute()
-    return res.data or []
+    try:
+        supabase = get_supabase()
+        res = supabase.table("citas").select("*, paciente:paciente_id(id, nombre, apellido, dni, fecha_nacimiento, telefono, email)").order("fecha_hora").execute()
+        if res.data is not None:
+            return res.data
+    except Exception as e:
+        print(f"Aviso al obtener citas de Supabase: {e}")
+
+    with Session(engine) as session:
+        citas = session.exec(select(Cita)).all()
+        resultado = []
+        for ci in citas:
+            p = session.get(Paciente, ci.paciente_id)
+            paciente_dict = {
+                "id": p.id, "nombre": p.nombre, "apellido": p.apellido,
+                "dni": p.dni, "fecha_nacimiento": p.fecha_nacimiento,
+                "telefono": p.telefono, "email": p.email
+            } if p else None
+            resultado.append({
+                "id": ci.id,
+                "fecha_hora": ci.fecha_hora,
+                "duracion_minutos": ci.duracion_minutos,
+                "motivo": ci.motivo,
+                "estado": ci.estado,
+                "paciente_id": ci.paciente_id,
+                "paciente": paciente_dict
+            })
+        return resultado
 
 def update_cita_estado(cita_id: int, estado: str) -> Optional[Dict[str, Any]]:
-    supabase = get_supabase()
-    res = supabase.table("citas").update({"estado": estado}).eq("id", cita_id).execute()
-    if res.data and len(res.data) > 0:
-        return res.data[0]
+    try:
+        supabase = get_supabase()
+        res = supabase.table("citas").update({"estado": estado}).eq("id", cita_id).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        print(f"Aviso al actualizar estado de cita en Supabase: {e}")
+
+    with Session(engine) as session:
+        c = session.get(Cita, cita_id)
+        if c:
+            c.estado = estado
+            session.add(c)
+            session.commit()
+            session.refresh(c)
+            return {
+                "id": c.id,
+                "fecha_hora": c.fecha_hora,
+                "duracion_minutos": c.duracion_minutos,
+                "motivo": c.motivo,
+                "estado": c.estado,
+                "paciente_id": c.paciente_id
+            }
     return None
 
 def delete_cita(cita_id: int) -> bool:
-    supabase = get_supabase()
-    res = supabase.table("citas").delete().eq("id", cita_id).execute()
-    return bool(res.data)
+    try:
+        supabase = get_supabase()
+        res = supabase.table("citas").delete().eq("id", cita_id).execute()
+        if res.data:
+            return True
+    except Exception as e:
+        print(f"Aviso al eliminar cita de Supabase: {e}")
+
+    with Session(engine) as session:
+        c = session.get(Cita, cita_id)
+        if c:
+            session.delete(c)
+            session.commit()
+            return True
+    return False
 
 # --- Configuración del Médico / Usuario ---
 
 def get_configuracion(usuario_id: Optional[int] = None) -> Dict[str, Any]:
-    supabase = get_supabase()
-    if usuario_id:
-        res = supabase.table("usuarios").select("*").eq("id", usuario_id).execute()
+    try:
+        supabase = get_supabase()
+        if usuario_id:
+            res = supabase.table("usuarios").select("*").eq("id", usuario_id).execute()
+            if res.data and len(res.data) > 0:
+                u = res.data[0]
+                return {
+                    "id": u["id"],
+                    "doctor_nombre": u.get("nombre", ""),
+                    "doctor_especialidad": u.get("especialidad", ""),
+                    "doctor_matricula": u.get("matricula", ""),
+                    "firma_ruta": u.get("firma_ruta"),
+                    "pedir_password_al_iniciar": True
+                }
+        
+        res = supabase.table("usuarios").select("*").limit(1).execute()
         if res.data and len(res.data) > 0:
             u = res.data[0]
             return {
@@ -538,20 +778,21 @@ def get_configuracion(usuario_id: Optional[int] = None) -> Dict[str, Any]:
                 "firma_ruta": u.get("firma_ruta"),
                 "pedir_password_al_iniciar": True
             }
-    
-    # Fallback al primer médico registrado
-    res = supabase.table("usuarios").select("*").limit(1).execute()
-    if res.data and len(res.data) > 0:
-        u = res.data[0]
-        return {
-            "id": u["id"],
-            "doctor_nombre": u.get("nombre", ""),
-            "doctor_especialidad": u.get("especialidad", ""),
-            "doctor_matricula": u.get("matricula", ""),
-            "firma_ruta": u.get("firma_ruta"),
-            "pedir_password_al_iniciar": True
-        }
-    
+    except Exception as e:
+        print(f"Aviso al obtener configuración de Supabase: {e}")
+
+    with Session(engine) as session:
+        conf = session.exec(select(Configuracion)).first()
+        if conf:
+            return {
+                "id": conf.id,
+                "doctor_nombre": conf.doctor_nombre or "",
+                "doctor_especialidad": conf.doctor_especialidad or "",
+                "doctor_matricula": conf.doctor_matricula or "",
+                "firma_ruta": conf.firma_ruta,
+                "pedir_password_al_iniciar": conf.pedir_password_al_iniciar
+            }
+
     return {
         "id": 0,
         "doctor_nombre": "",
@@ -562,21 +803,48 @@ def get_configuracion(usuario_id: Optional[int] = None) -> Dict[str, Any]:
     }
 
 def update_configuracion(config_in: ConfiguracionUpdate, usuario_id: Optional[int] = None) -> Dict[str, Any]:
-    supabase = get_supabase()
-    update_data = {}
-    if config_in.doctor_nombre is not None:
-        update_data["nombre"] = config_in.doctor_nombre
-    if config_in.doctor_especialidad is not None:
-        update_data["especialidad"] = config_in.doctor_especialidad
-    if config_in.doctor_matricula is not None:
-        update_data["matricula"] = config_in.doctor_matricula
-        
-    if update_data and usuario_id:
-        res = supabase.table("usuarios").update(update_data).eq("id", usuario_id).execute()
-        if res.data and len(res.data) > 0:
-            return get_configuracion(usuario_id)
+    try:
+        supabase = get_supabase()
+        update_data = {}
+        if config_in.doctor_nombre is not None:
+            update_data["nombre"] = config_in.doctor_nombre
+        if config_in.doctor_especialidad is not None:
+            update_data["especialidad"] = config_in.doctor_especialidad
+        if config_in.doctor_matricula is not None:
+            update_data["matricula"] = config_in.doctor_matricula
             
-    return get_configuracion(usuario_id)
+        if update_data and usuario_id:
+            res = supabase.table("usuarios").update(update_data).eq("id", usuario_id).execute()
+            if res.data and len(res.data) > 0:
+                return get_configuracion(usuario_id)
+                
+        res_conf = get_configuracion(usuario_id)
+        if res_conf.get("id"):
+            return res_conf
+    except Exception as e:
+        print(f"Aviso al actualizar configuración en Supabase: {e}")
+
+    with Session(engine) as session:
+        conf = session.exec(select(Configuracion)).first()
+        if not conf:
+            conf = Configuracion(id=1)
+        if config_in.doctor_nombre is not None:
+            conf.doctor_nombre = config_in.doctor_nombre
+        if config_in.doctor_especialidad is not None:
+            conf.doctor_especialidad = config_in.doctor_especialidad
+        if config_in.doctor_matricula is not None:
+            conf.doctor_matricula = config_in.doctor_matricula
+        session.add(conf)
+        session.commit()
+        session.refresh(conf)
+        return {
+            "id": conf.id,
+            "doctor_nombre": conf.doctor_nombre or "",
+            "doctor_especialidad": conf.doctor_especialidad or "",
+            "doctor_matricula": conf.doctor_matricula or "",
+            "firma_ruta": conf.firma_ruta,
+            "pedir_password_al_iniciar": conf.pedir_password_al_iniciar
+        }
 
 def update_firma_ruta(firma_ruta: str, usuario_id: Optional[int] = None) -> Dict[str, Any]:
     supabase = get_supabase()

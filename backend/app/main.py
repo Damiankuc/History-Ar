@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, BackgroundTasks, Request
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -289,6 +290,62 @@ def delete_paciente(paciente_id: int):
             detail=f"Paciente con ID {paciente_id} no encontrado"
         )
     return {"message": "Paciente y sus registros eliminados con éxito"}
+
+@app.get("/api/pacientes/{paciente_id}/exportar")
+def exportar_paciente(paciente_id: int):
+    """Exporta la historia clínica completa del paciente (resumen JSON, texto y archivos adjuntos) en formato ZIP."""
+    import tempfile
+    import json
+    db_paciente = crud.get_paciente(paciente_id=paciente_id)
+    if not db_paciente:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Paciente con ID {paciente_id} no encontrado"
+        )
+
+    temp_dir = tempfile.mkdtemp()
+    dni_clean = db_paciente.get("dni", "dni")
+    zip_filename = f"expediente_paciente_{paciente_id}_{dni_clean}.zip"
+    zip_filepath = os.path.join(temp_dir, zip_filename)
+
+    with zipfile.ZipFile(zip_filepath, "w", zipfile.ZIP_DEFLATED) as zipf:
+        json_data = json.dumps(db_paciente, indent=2, default=str, ensure_ascii=False)
+        zipf.writestr("historia_clinica.json", json_data)
+
+        resumen_txt = f"HISTORIA CLÍNICA CONSOLIDADA - HISTORY-AR\n"
+        resumen_txt += "=" * 55 + "\n"
+        resumen_txt += f"PACIENTE: {db_paciente.get('apellido')}, {db_paciente.get('nombre')}\n"
+        resumen_txt += f"DNI: {db_paciente.get('dni')}\n"
+        resumen_txt += f"FECHA NACIMIENTO: {db_paciente.get('fecha_nacimiento')}\n"
+        resumen_txt += f"TELÉFONO: {db_paciente.get('telefono', '-')}\n"
+        resumen_txt += f"EMAIL: {db_paciente.get('email', '-')}\n"
+        resumen_txt += f"OBRA SOCIAL: {db_paciente.get('obra_social', '-')} (Afiliado: {db_paciente.get('numero_afiliado', '-')})\n\n"
+        resumen_txt += f"NOTAS GENERALES:\n{db_paciente.get('notas_generales', 'Sin notas')}\n\n"
+
+        consultas = db_paciente.get("consultas", [])
+        resumen_txt += f"CONSULTAS MÉDICAS REGISTRADAS ({len(consultas)}):\n"
+        for c in consultas:
+            resumen_txt += f"- [{c.get('fecha')}] Motivo: {c.get('motivo')} | Diag: {c.get('diagnostico')} | Tratamiento: {c.get('tratamiento')}\n"
+
+        recetas = db_paciente.get("recetas", [])
+        resumen_txt += f"\nRECETAS MÉDICAS EMITIDAS ({len(recetas)}):\n"
+        for r in recetas:
+            resumen_txt += f"- [{r.get('fecha')}] Medicamentos: {r.get('medicamentos')} | Indicaciones: {r.get('indicaciones')}\n"
+
+        zipf.writestr("resumen_medico.txt", resumen_txt)
+
+        for doc in db_paciente.get("documentos", []):
+            ruta_relativa = doc.get("ruta_archivo")
+            if ruta_relativa:
+                full_doc_path = os.path.join(uploads_dir, os.path.basename(ruta_relativa))
+                if os.path.exists(full_doc_path):
+                    zipf.write(full_doc_path, arcname=f"documentos/{os.path.basename(full_doc_path)}")
+
+    return FileResponse(
+        zip_filepath,
+        filename=zip_filename,
+        media_type="application/zip"
+    )
 
 # --- Endpoints de Consultas ---
 

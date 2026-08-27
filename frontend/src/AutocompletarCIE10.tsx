@@ -168,7 +168,7 @@ export const AutocompletarCIE10: React.FC<AutocompletarCIE10Props> = ({
                 borderBottom: "1px solid var(--border-color, #eee)",
                 fontSize: "0.85rem",
                 display: "flex",
-                justify: "space-between",
+                justifyContent: "space-between",
                 alignItems: "center"
               }}
             >

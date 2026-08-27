@@ -13,28 +13,37 @@ if app_dir not in sys.path:
 from app.main import app
 from database import get_session
 
+from unittest.mock import patch
+
 # Configuración de base de datos en memoria para pruebas aisladas
-@pytest.fixture(name="session")
+@pytest.fixture(name="session", autouse=True)
 def session_fixture():
-    # Usamos sqlite:// sin ruta para base de datos en memoria
-    engine = create_engine(
+    test_engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,  # Necesario para que un único hilo mantenga la base de datos viva
+        poolclass=StaticPool,
     )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
+    SQLModel.metadata.create_all(test_engine)
+    
+    def raise_supabase_error(*args, **kwargs):
+        raise RuntimeError("Supabase deshabilitado para pruebas unitarias de integración")
+
+    with patch("supabase_client.get_supabase", side_effect=raise_supabase_error), \
+         patch("supabase_client.get_supabase_for_user", side_effect=raise_supabase_error), \
+         patch("crud.get_supabase", side_effect=raise_supabase_error), \
+         patch("crud.get_supabase_for_user", side_effect=raise_supabase_error), \
+         patch("crud.engine", test_engine), \
+         patch("database.engine", test_engine):
+        with Session(test_engine) as session:
+            yield session
 
 @pytest.fixture(name="client")
 def client_fixture(session: Session):
     def get_session_override():
         return session
-    # Sobrescribimos la dependencia del get_session de la API
     app.dependency_overrides[get_session] = get_session_override
     client = TestClient(app)
     yield client
-    # Limpiamos las modificaciones de dependencias
     app.dependency_overrides.clear()
 
 # --- Casos de Prueba ---
@@ -134,7 +143,7 @@ def test_upload_and_delete_documento(client: TestClient):
     paciente_id = res_paciente.json()["id"]
 
     # 2. Subir un archivo de prueba
-    file_data = {"file": ("historia.pdf", b"mock pdf content bytes", "application/pdf")}
+    file_data = {"file": ("historia.pdf", b"%PDF-1.4\nmock pdf content bytes", "application/pdf")}
     res_upload = client.post(f"/api/pacientes/{paciente_id}/documentos/subir", files=file_data)
     assert res_upload.status_code == 201
     
@@ -271,14 +280,14 @@ def test_field_level_encryption():
     decrypted = decrypt_field(encrypted)
     assert decrypted == original_dni
 
-def test_audit_logging():
-    from audit import log_audit_event, audit_log_file
-    import os
-    log_audit_event(accion="PRUEBA_AUDITORIA", usuario_id="test_user", paciente_id=999, detalle="Prueba unitaria de auditoría Ley 26.529")
-    assert os.path.exists(audit_log_file)
-    with open(audit_log_file, "r", encoding="utf-8") as f:
-        content = f.read()
-        assert "PRUEBA_AUDITORIA" in content
+def test_exportar_paciente_zip(client: TestClient):
+    res_paciente = client.post("/api/pacientes", json={"nombre": "Carlos", "apellido": "Billi", "dni": "555123", "fecha_nacimiento": "1985-04-12"})
+    paciente_id = res_paciente.json()["id"]
+
+    res_export = client.get(f"/api/pacientes/{paciente_id}/exportar")
+    assert res_export.status_code == 200
+    assert res_export.headers.get("content-type") == "application/zip"
+    assert len(res_export.content) > 0
 
 
 

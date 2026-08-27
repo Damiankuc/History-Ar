@@ -3,6 +3,12 @@ from typing import Optional
 from supabase import create_client, Client
 from supabase.lib.client_options import ClientOptions
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://qvutqqfsypzcfjhhzqsk.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_KT61xj__yMLdxD37Wc5Teg_RFfQz6Rm")
 
