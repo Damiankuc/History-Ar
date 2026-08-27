@@ -37,7 +37,7 @@ jobs:
 
   backend-check:
     name: Backend Tests & Quality
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +56,7 @@ jobs:
 
       - name: Run Backend Pytest Suite
         env:
+          PYTHONPATH: app
           REQUIRE_AUTH: "false"
           SUPABASE_URL: "https://qvutqqfsypzcfjhhzqsk.supabase.co"
           SUPABASE_KEY: "sb_publishable_KT61xj__yMLdxD37Wc5Teg_RFfQz6Rm"
